@@ -89,8 +89,8 @@ The dashboard is available at `http://localhost:5173`.
 flowchart TB
     subgraph Browser["Browser (SvelteKit SPA)"]
         UI["Pages + Sidebar + TopBar"]
-        Stores["Shared Stores\nhealth · services · infra\nmetrics · goroutines · logs]
-        Poller["mcpPoller (background)\n· 3s batched MCP poll\n· 10s goroutine poll"]
+        Stores["Shared Stores<br>health · services · infra<br>metrics · goroutines · logs"]
+        Poller["mcpPoller (background)<br>· 3s batched MCP poll<br>· 10s goroutine poll"]
         UI --> Stores
         Poller --> Stores
     end
@@ -104,7 +104,7 @@ flowchart TB
     end
 
     subgraph Server["stackyrd Go Server (:8080)"]
-        MCP["MCP JSON-RPC\n(batch + SSE)"]
+        MCP["MCP JSON-RPC<br>(batch + SSE)"]
         REST["REST Endpoints"]
         Prometheus["Prometheus /metrics"]
     end

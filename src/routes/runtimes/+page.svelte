@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import { goroutineDump, goroutineHistory } from '$lib/stores/data';
 	import { mcpPoller } from '$lib/stores/mcpPoller';
 	import PageHeader from '$lib/components/layout/PageHeader.svelte';
@@ -10,25 +11,19 @@
 	import Button from '$lib/components/ui/Button.svelte';
 	import Spinner from '$lib/components/ui/Spinner.svelte';
 	import EmptyState from '$lib/components/ui/EmptyState.svelte';
-	import { Plot, BarY, Line, RuleY, Frame, GridY, Text } from 'svelteplot';
+	import { Plot, BarY, Line, RuleY, Frame, GridY } from 'svelteplot';
 	import { Activity, RefreshCw, AlertTriangle, Bug } from 'lucide-svelte';
-	import type { GoroutineDataPoint } from '$lib/types/api';
 
-	let now = $state(Date.now());
+	let mounted = $state(false);
 
-	$effect(() => {
-		const ticker = setInterval(() => { now = Date.now(); }, 1000);
-		return () => clearInterval(ticker);
-	});
+	onMount(() => { mounted = true; });
 
 	const MAX_POINTS = 120;
 
 	const chartData = $derived(
 		$goroutineHistory.map((p, i) => ({
 			idx: i,
-			time: p.timestamp,
-			count: p.count,
-			label: formatTime(p.timestamp)
+			count: p.count
 		}))
 	);
 
@@ -78,18 +73,6 @@
 		return 'stable';
 	});
 
-	function formatTime(ts: number): string {
-		const d = new Date(ts);
-		return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
-	}
-
-	function formatAgo(ts: number): string {
-		const diff = Math.floor((now - ts) / 1000);
-		if (diff < 60) return `${diff}s ago`;
-		if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
-		return `${Math.floor(diff / 3600)}h ago`;
-	}
-
 	const yMax = $derived(() => {
 		const m = maxCount();
 		return m > 0 ? Math.ceil(m * 1.15) : 10;
@@ -100,7 +83,7 @@
 	}
 </script>
 
-<PageHeader title="Runtimes" subtitle="Goroutine histogram & leak detection — last hour FIFO">
+<PageHeader title="Runtimes" subtitle="Goroutine histogram & leak detection — 20min FIFO">
 	<Button variant="outline" size="sm" onclick={refreshGoroutines} aria-label="Refresh goroutines">
 		<RefreshCw class="h-4 w-4" />
 		Refresh
@@ -124,7 +107,7 @@
 			</Card>
 			<Card>
 				<CardContent class="p-5">
-					<div class="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">Peak (1h)</div>
+					<div class="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">Peak (20min)</div>
 					<div class="mt-1 text-2xl font-bold tabular-nums">{maxCount()}</div>
 					<div class="text-[11px] text-muted-foreground font-semibold">max observed</div>
 				</CardContent>
@@ -160,17 +143,17 @@
 			<CardHeader class="pb-3">
 				<div class="flex items-center gap-2">
 					<Activity class="h-4 w-4 text-primary" />
-					<CardTitle class="text-sm font-semibold">Goroutine Count (1h FIFO)</CardTitle>
+					<CardTitle class="text-sm font-semibold">Goroutine Count (20min FIFO)</CardTitle>
 					<span class="text-[11px] font-semibold text-muted-foreground">● live from MCP • stackyrd_goroutines</span>
 				</div>
 			</CardHeader>
 			<CardContent>
-				{#if chartData.length > 1}
+				{#if mounted && chartData.length > 1 && yMax() > 0}
 					<div class="w-full h-64">
 						<Plot
 							padding={40}
 							height={260}
-							x={{ axis: 'bottom', label: 'Time', tickFormat: ((d: unknown) => chartData[d as number]?.label ?? '') as never, tickRotate: -45 }}
+							x={{ axis: 'bottom', label: 'Time' }}
 							y={{ domain: [0, yMax()], axis: 'left', label: 'Goroutines' }}
 						>
 							<Frame />
@@ -178,17 +161,6 @@
 							<BarY data={chartData} x="idx" y="count" fill="#ed225d" fillOpacity={0.7} />
 							<Line data={chartData} x="idx" y="count" stroke="#000" strokeWidth={1.5} curve="monotone-x" />
 							<RuleY data={[avgCount()]} stroke="#dfed33" strokeWidth={2} strokeDasharray="4 2" />
-							<Text
-								data={[{ idx: chartData.length - 1, count: avgCount(), label: `avg ${avgCount()}` }]}
-								x="idx"
-								y="count"
-								text="label"
-								fontSize={10}
-								fontWeight={600}
-								fill="#000"
-								dy={-8}
-								textAnchor="end"
-							/>
 						</Plot>
 					</div>
 				{:else}
@@ -207,7 +179,7 @@
 					<span class="flex items-center gap-1.5">
 						<span class="inline-block h-0.5 w-4 bg-p5-yellow" style="border-top: 2px dashed #dfed33"></span> Rolling avg
 					</span>
-					<span class="ml-auto">{$goroutineHistory.length} points • {$goroutineHistory.length > 0 ? formatAgo($goroutineHistory[0].timestamp) : '—'} to now</span>
+					<span class="ml-auto">{$goroutineHistory.length} points</span>
 				</div>
 			</CardContent>
 		</Card>
