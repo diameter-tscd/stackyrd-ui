@@ -18,6 +18,7 @@
 	let polling: ReturnType<typeof setInterval> | null = null;
 
 	onMount(async () => {
+		if (!$auth.authenticated) return;
 		await fetchServices();
 		polling = setInterval(() => fetchServices(), 15000);
 	});
@@ -26,7 +27,12 @@
 		if (polling) clearInterval(polling);
 	});
 
+	$effect(() => {
+		if (!$auth.authenticated && polling) { clearInterval(polling); polling = null; }
+	});
+
 	async function fetchServices() {
+		if (!$auth.authenticated) return;
 		try {
 			const res = await getMCPServices($auth.token);
 			if (res.data) services.set(res.data);

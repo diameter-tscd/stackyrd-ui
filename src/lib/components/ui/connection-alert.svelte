@@ -10,15 +10,10 @@
 	import { animate } from "motion";
 
 	let dismissed = $state(false);
-	let hasNotified = $state(false);
 
 	$effect(() => {
 		if ($connectionStatus !== 'disconnected') {
 			dismissed = false;
-			hasNotified = false;
-		} else if (!hasNotified) {
-			hasNotified = true;
-			toasts.add('error', 'Connection lost — unable to reach stackyrd on :8080. Check server & token.', 8000);
 		}
 	});
 

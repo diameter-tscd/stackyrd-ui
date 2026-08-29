@@ -13,7 +13,10 @@
 	import Separator from '$lib/components/ui/separator.svelte';
 	import { Settings, Wifi, WifiOff, Eye, EyeOff } from 'lucide-svelte';
 	import ThemeToggle from '$lib/components/ui/theme-toggle.svelte';
-	import { PUBLIC_API_URL, PUBLIC_MCP_URL } from '$env/static/public';
+	import { env } from '$env/dynamic/public';
+
+	const PUBLIC_API_URL = env.PUBLIC_API_URL || 'http://localhost:8080';
+	const PUBLIC_MCP_URL = env.PUBLIC_MCP_URL || 'http://localhost:8080/mcp';
 
 	let apiUrl = $state(PUBLIC_API_URL);
 	let mcpUrl = $state(PUBLIC_MCP_URL);

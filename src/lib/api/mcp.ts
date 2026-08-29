@@ -1,5 +1,6 @@
-import { PUBLIC_MCP_URL } from '$env/static/public';
+import { env } from '$env/dynamic/public';
 import { browser } from '$app/environment';
+import { mcpInstanceId } from '$lib/stores/data';
 import type { ApiResponse, MCPToolResult } from '$lib/types/api';
 
 interface JSONRPCRequest {
@@ -23,12 +24,15 @@ function resolveMcpUrl(endpoint?: string): string {
 			const stored = localStorage.getItem('stackyrd_auth');
 			if (stored) {
 				const parsed = JSON.parse(stored) as { mcpUrl?: string };
-				if (parsed.mcpUrl) return parsed.mcpUrl;
+				if (parsed.mcpUrl) {
+					if (parsed.mcpUrl.includes('localhost:8080') || parsed.mcpUrl.includes('127.0.0.1:8080')) return '/mcp';
+					return parsed.mcpUrl;
+				}
 			}
 		} catch {}
 		return '/mcp';
 	}
-	return PUBLIC_MCP_URL;
+	return env.PUBLIC_MCP_URL || 'http://localhost:8080/mcp';
 }
 
 export async function mcpCall(
@@ -75,16 +79,42 @@ export async function mcpCall(
 		body: JSON.stringify(body)
 	});
 
-	let data: JSONRPCResponse;
-	const text = await response.text();
 	try {
-		data = JSON.parse(text) as JSONRPCResponse;
-	} catch {
-		throw new Error(`MCP endpoint returned non-JSON response (HTTP ${response.status}): ${text.slice(0, 200)}`);
+		const iid = response.headers.get('X-MCP-Instance-ID') || response.headers.get('x-mcp-instance-id');
+		if (iid) mcpInstanceId.set(iid);
+	} catch {}
+
+	const rawText = await response.text();
+	const contentType = response.headers.get('content-type') || '';
+	const isSse = contentType.includes('text/event-stream') || rawText.includes('event:') && rawText.includes('data:');
+	let jsonText = rawText;
+	if (isSse) {
+		const lines = rawText.split('\n');
+		const dataLines = lines.filter((l) => l.startsWith('data:')).map((l) => l.slice(5).trim());
+		jsonText = dataLines.join('\n') || rawText;
+		const errorMatch = rawText.match(/data:\s*(\{"error":.*\})/);
+		if (errorMatch && !jsonText.trim().startsWith('{')) jsonText = errorMatch[1];
 	}
+	let parsed: unknown;
+	try {
+		parsed = JSON.parse(jsonText || rawText);
+	} catch {
+		throw new Error(`MCP endpoint returned non-JSON response (HTTP ${response.status}): ${rawText.slice(0, 200)}`);
+	}
+	if (Array.isArray(parsed)) {
+		const batch = parsed as JSONRPCResponse[];
+		const single = batch.find((r) => r.id === body.id) ?? batch[0];
+		if (single) {
+			if (!response.ok) throw new Error(single.error?.message ?? `MCP batch failed ${response.status}`);
+			if (single.error) throw new Error(single.error.message);
+			return single.result;
+		}
+		throw new Error('MCP batch returned no matching response');
+	}
+	const data = parsed as JSONRPCResponse;
 
 	if (!response.ok) {
-		const msg = data.error?.message ?? `MCP request failed with HTTP ${response.status}`;
+		const msg = data.error?.message ?? jsonText.slice(0, 200) ?? `MCP request failed with HTTP ${response.status}`;
 		if (response.status === 405 && msg.includes('GET not supported')) {
 			throw new Error(
 				'MCP endpoint rejected GET — ensure client uses POST with Content-Type: application/json and MCP-Protocol-Version header. Check vite proxy /mcp → POST only.'

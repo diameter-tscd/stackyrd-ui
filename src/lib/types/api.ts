@@ -15,11 +15,18 @@ export interface HealthData {
 	status?: string;
 	progress?: number;
 	initialization_progress?: number;
-	uptime?: string;
+	uptime?: string | number;
+	uptime_seconds?: number;
+	uptimeSeconds?: number;
+	started_at?: string;
+	start_time?: string;
+	boot_time?: string;
+	startedAt?: string;
 	environment?: string;
 	version?: string;
 	services?: ServiceHealth[];
 	infrastructure?: InfraHealth[] | Record<string, unknown>;
+	[key: string]: unknown;
 }
 
 export interface ServiceHealth {
@@ -123,6 +130,37 @@ export interface LogEntry {
 	message: string;
 	source?: string;
 	fields?: Record<string, string>;
+}
+
+export interface UptimeData {
+	uptime: string;
+	uptime_seconds: number;
+	started_at: string;
+	started_at_unix: number;
+}
+
+export interface ResourceData {
+	cpu_percent: number;
+	mem_percent: number;
+	mem_used_mib: number;
+	mem_total_mib: number;
+	cores: number;
+	goroutines: number;
+	app_mem_mib: number;
+	hostname: string;
+	cpu_model: string;
+	pid: number;
+}
+
+export interface InstanceIdentity {
+	instance_id: string;
+	pod_name: string;
+	pod_ip: string;
+	namespace: string;
+	node_name: string;
+	hostname: string;
+	pid: number;
+	started_at: string;
 }
 
 export type ThemePreset = 'dark' | 'midnight' | 'terminal' | 'slate' | 'ember';

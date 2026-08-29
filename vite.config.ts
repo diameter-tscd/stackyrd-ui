@@ -21,6 +21,10 @@ export default defineConfig({
 			'/metrics': {
 				target: 'http://localhost:8080',
 				changeOrigin: true
+			},
+			'/swagger': {
+				target: 'http://localhost:8080',
+				changeOrigin: true
 			}
 		}
 	}

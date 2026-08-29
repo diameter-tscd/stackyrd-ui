@@ -39,7 +39,7 @@
 			<Circle class={cn("h-2 w-2 fill-current opacity-30", statusConfig[$connectionStatus]?.color)} aria-hidden="true" />
 		</span>
 		<Separator orientation="vertical" class="h-6 hidden sm:block bg-black" />
-		<span class="hidden lg:inline-flex items-center gap-1.5 text-xs font-mono text-muted-foreground border-2 border-black rounded-full px-2.5 py-1 bg-card">
+		<span class="hidden lg:inline-flex items-center gap-1.5 text-xs font-semibold text-foreground border-2 border-black rounded-full px-2.5 py-1 bg-card">
 			<Clock class="h-3.5 w-3.5" aria-hidden="true" />
 			<time>{currentTime}</time>
 		</span>

@@ -39,3 +39,6 @@ Thumbs.db
 
 # Static assets generated at build
 /static/favicon.ico
+
+# Agent
+/.kilo/

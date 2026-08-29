@@ -1,5 +1,7 @@
 import { writable, derived, type Readable } from 'svelte/store';
 import { browser } from '$app/environment';
+import { logStore } from './logs';
+import { health, services, infra, resources, instanceIdentity, mcpUptime, mcpInstanceId, connectionStatus } from './data';
 
 export interface AuthState {
 	token: string;
@@ -50,7 +52,22 @@ function createAuthStore() {
 				return next;
 			}),
 		logout: () => {
-			if (browser) localStorage.removeItem(STORAGE_KEY);
+			if (browser) {
+				localStorage.removeItem(STORAGE_KEY);
+				try { logStore.stop(); } catch {}
+				try { health.set(null); } catch {}
+				try { services.set([]); } catch {}
+				try { infra.set([]); } catch {}
+				try { resources.set(null); } catch {}
+				try { instanceIdentity.set(null); } catch {}
+				try { mcpUptime.set(null); } catch {}
+				try { mcpInstanceId.set(null); } catch {}
+				try { connectionStatus.set('checking'); } catch {}
+				try {
+					update(() => ({ token: '', apiUrl: '', mcpUrl: '', authenticated: false, lastChecked: null }));
+					return;
+				} catch {}
+			}
 			set({ token: '', apiUrl: '', mcpUrl: '', authenticated: false, lastChecked: null });
 		}
 	};

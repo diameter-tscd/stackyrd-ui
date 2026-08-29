@@ -6,6 +6,7 @@
 		BarChart3,
 		ScrollText,
 		Route,
+		BookOpen,
 		Settings,
 		Cog,
 		ChevronLeft,
@@ -17,6 +18,7 @@
 	import { cn } from "$lib/utils.js";
 	import Separator from "$lib/components/ui/separator.svelte";
 	import Button from "$lib/components/ui/Button.svelte";
+	import { animate } from 'motion';
 
 	interface NavItem {
 		label: string;
@@ -32,6 +34,7 @@
 		{ label: 'Metrics', href: '/metrics', icon: BarChart3, match: /^\/metrics/ },
 		{ label: 'Logs', href: '/logs', icon: ScrollText, match: /^\/logs/ },
 		{ label: 'Endpoints', href: '/endpoints', icon: Route, match: /^\/endpoints/ },
+		{ label: 'Swagger', href: '/swagger', icon: BookOpen, match: /^\/swagger/ },
 		{ label: 'Config', href: '/config', icon: Settings, match: /^\/config/ },
 		{ label: 'Settings', href: '/settings', icon: Cog, match: /^\/settings/ }
 	];
@@ -39,6 +42,15 @@
 	function isActive(item: NavItem): boolean {
 		if (item.match) return item.match.test($page.url.pathname);
 		return $page.url.pathname === item.href;
+	}
+
+	function press(node: HTMLAnchorElement) {
+		const onDown = () => {
+			if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+			animate(node, { scale: [1, 0.96, 1] }, { duration: 0.28, easing: 'ease-out' } as any);
+		};
+		node.addEventListener('pointerdown', onDown);
+		return () => node.removeEventListener('pointerdown', onDown);
 	}
 </script>
 
@@ -62,12 +74,13 @@
 		{#each navItems as item}
 			<a
 				href={item.href}
+				{@attach press}
 				aria-current={isActive(item) ? 'page' : undefined}
 				class={cn(
-					"flex items-center gap-3 px-3 py-2.5 rounded-full text-sm font-medium border-2 transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+					"flex items-center gap-3 px-3 py-2.5 rounded-full text-sm font-medium border-2 transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 active:scale-[0.97] will-change-transform",
 					isActive(item)
 						? 'bg-p5-yellow text-black border-black shadow-sm'
-						: 'bg-transparent text-sidebar-foreground border-transparent hover:bg-accent hover:text-accent-foreground hover:border-black'
+						: 'bg-transparent text-sidebar-foreground border-transparent hover:bg-accent hover:text-accent-foreground hover:border-black hover:translate-x-[1px]'
 				)}
 				title={$sidebarCollapsed ? item.label : undefined}
 			>
@@ -83,7 +96,7 @@
 		<Button
 			variant="outline"
 			size="icon"
-			class="w-full rounded-full border-black bg-background hover:bg-black hover:text-white"
+			class="w-full rounded-full border-black bg-background hover:bg-black hover:text-white active:scale-[0.96] transition-transform"
 			onclick={() => sidebarCollapsed.update((v) => !v)}
 			aria-label={$sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
 		>

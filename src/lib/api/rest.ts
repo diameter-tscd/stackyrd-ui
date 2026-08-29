@@ -1,4 +1,4 @@
-import { PUBLIC_API_URL } from '$env/static/public';
+import { env } from '$env/dynamic/public';
 import { browser } from '$app/environment';
 
 export class ApiError extends Error {
@@ -31,7 +31,7 @@ export async function apiFetch<T>(
 		? path
 		: browser
 			? path
-			: `${PUBLIC_API_URL}${path}`;
+			: `${env.PUBLIC_API_URL || 'http://localhost:8080'}${path}`;
 
 	const reqHeaders: Record<string, string> = {
 		'Content-Type': 'application/json',

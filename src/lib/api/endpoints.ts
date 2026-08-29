@@ -1,6 +1,8 @@
 import { apiFetch } from '$lib/api/rest';
 import { mcpToolsCall } from '$lib/api/mcp';
-import { PUBLIC_API_TOKEN } from '$env/static/public';
+import { env } from '$env/dynamic/public';
+
+const PUBLIC_API_TOKEN = env.PUBLIC_API_TOKEN || '';
 import type {
 	ApiResponse,
 	HealthData,
@@ -8,7 +10,10 @@ import type {
 	InfraStatus,
 	EndpointList,
 	ConfigData,
-	EndpointMeta
+	EndpointMeta,
+	UptimeData,
+	ResourceData,
+	InstanceIdentity
 } from '$lib/types/api';
 
 function effToken(token: string | null): string | null {
@@ -30,11 +35,44 @@ export async function getMetrics(token: string | null): Promise<string> {
 	const response = await fetch('/metrics', {
 		headers: t ? { Authorization: `Bearer ${t}` } : {}
 	});
-	return response.text();
+	const text = await response.text();
+	if (!response.ok) {
+		const { ApiError } = await import('$lib/api/rest');
+		throw new ApiError(text || response.statusText, response.status, text);
+	}
+	return text;
 }
 
 export async function getMCPHealth(token: string | null): Promise<ApiResponse<unknown>> {
 	return mcpToolsCall(effToken(token), 'stackyrd_health');
+}
+
+export async function getMCPUpTime(token: string | null): Promise<ApiResponse<UptimeData>> {
+	return mcpToolsCall(effToken(token), 'stackyrd_uptime') as Promise<ApiResponse<UptimeData>>;
+}
+
+export async function getMCPResources(token: string | null): Promise<ApiResponse<ResourceData>> {
+	return mcpToolsCall(effToken(token), 'stackyrd_resources') as Promise<ApiResponse<ResourceData>>;
+}
+
+export async function getMCPMiddleware(token: string | null): Promise<ApiResponse<Array<{ name: string; enabled: boolean }>>> {
+	return mcpToolsCall(effToken(token), 'stackyrd_middleware') as Promise<ApiResponse<Array<{ name: string; enabled: boolean }>>>;
+}
+
+export async function getMCPDashboard(token: string | null): Promise<ApiResponse<unknown>> {
+	return mcpToolsCall(effToken(token), 'stackyrd_dashboard');
+}
+
+export async function getMCPApp(token: string | null): Promise<ApiResponse<unknown>> {
+	return mcpToolsCall(effToken(token), 'stackyrd_app');
+}
+
+export async function getMCPIdentity(token: string | null): Promise<ApiResponse<InstanceIdentity>> {
+	return mcpToolsCall(effToken(token), 'stackyrd_identity') as Promise<ApiResponse<InstanceIdentity>>;
+}
+
+export async function getMCPCluster(token: string | null): Promise<ApiResponse<{ members: InstanceIdentity[] }>> {
+	return mcpToolsCall(effToken(token), 'stackyrd_cluster') as Promise<ApiResponse<{ members: InstanceIdentity[] }>>;
 }
 
 export async function getMCPServices(token: string | null): Promise<ApiResponse<ServiceMeta[]>> {

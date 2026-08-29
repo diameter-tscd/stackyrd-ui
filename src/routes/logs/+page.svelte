@@ -1,108 +1,34 @@
 <script lang="ts">
-	import { onMount, onDestroy } from 'svelte';
+	import { onMount } from 'svelte';
 	import PageHeader from '$lib/components/layout/PageHeader.svelte';
 	import Card from '$lib/components/ui/Card.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 	import Input from '$lib/components/ui/input.svelte';
-	import Label from '$lib/components/ui/label.svelte';
 	import { ScrollText, Pause, Play, Trash2, Download, Timer, ChevronDown } from 'lucide-svelte';
-	import type { LogEntry } from '$lib/types/api';
 	import { animate } from "motion";
+	import { logStore } from '$lib/stores/logs';
 
-	let logs = $state<LogEntry[]>([]);
-	let buffer: LogEntry[] = $state([]);
 	let filter = $state<string>('all');
 	let search = $state('');
-	let paused = $state(false);
 	let autoScroll = $state(true);
-	let streamInterval = $state<number>(1000);
-	let eventSource: EventSource | null = null;
 	let logContainer: HTMLDivElement | null = null;
-	let flushTimer: ReturnType<typeof setInterval> | null = null;
 
 	const intervalOptions = [500, 1000, 2000, 5000];
 
 	onMount(() => {
-		connectStream();
-		startFlushTimer();
-	});
-
-	onDestroy(() => {
-		if (eventSource) eventSource.close();
-		if (reconnectTimer) clearTimeout(reconnectTimer);
-		if (flushTimer) clearInterval(flushTimer);
+		logStore.start();
 	});
 
 	$effect(() => {
-		streamInterval;
-		startFlushTimer();
+		if (autoScroll && logContainer && $logStore.logs.length) {
+			queueMicrotask(() => {
+				if (logContainer) logContainer.scrollTop = logContainer.scrollHeight;
+			});
+		}
 	});
 
-	function startFlushTimer() {
-		if (flushTimer) clearInterval(flushTimer);
-		flushTimer = setInterval(() => {
-			if (paused || buffer.length === 0) return;
-			const toAdd = buffer.splice(0, buffer.length);
-			logs = [...logs.slice(-500 + toAdd.length), ...toAdd].slice(-500);
-			if (autoScroll && logContainer) {
-				logContainer.scrollTop = logContainer.scrollHeight;
-			}
-		}, streamInterval);
-	}
-
-	let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
-	let reconnectAttempts = 0;
-
-	function connectStream() {
-		if (reconnectTimer) clearTimeout(reconnectTimer);
-		const streamId = 'dashboard-logs';
-		eventSource = new EventSource(`/api/v1/events/stream/${streamId}`);
-		eventSource.onopen = () => {
-			reconnectAttempts = 0;
-		};
-		eventSource.onmessage = (event) => {
-			if (paused) return;
-			try {
-				const raw = JSON.parse(event.data) as Record<string, unknown>;
-				const entry: LogEntry = {
-					timestamp: (raw.timestamp as string) ?? (raw.Timestamp as string) ?? new Date().toISOString(),
-					level: ((raw.level as string) ?? (raw.Type as string) ?? (raw.type as string) ?? 'info').toLowerCase() as LogEntry['level'],
-					message: (raw.message as string) ?? (raw.Message as string) ?? String(raw.data ?? ''),
-					source: (raw.source as string) ?? (raw.StreamID as string) ?? (raw.stream_id as string) ?? (raw.Data as Record<string, unknown>)?.source as string ?? undefined
-				};
-				if (!entry.message) return;
-				buffer.push(entry);
-				if (streamInterval <= 500) {
-					const toAdd = buffer.splice(0, buffer.length);
-					logs = [...logs.slice(-500 + toAdd.length), ...toAdd].slice(-500);
-					if (autoScroll && logContainer) logContainer.scrollTop = logContainer.scrollHeight;
-				}
-			} catch {}
-		};
-		eventSource.onerror = () => {
-			eventSource?.close();
-			eventSource = null;
-			if (reconnectAttempts < 5) {
-				const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 10000);
-				reconnectAttempts++;
-				reconnectTimer = setTimeout(connectStream, delay);
-			}
-		};
-	}
-
-	function exportLogs() {
-		const data = logs.map((l) => JSON.stringify(l)).join('\n');
-		const blob = new Blob([data], { type: 'application/json' });
-		const url = URL.createObjectURL(blob);
-		const a = document.createElement('a');
-		a.href = url;
-		a.download = `stackyrd-logs-${new Date().toISOString()}.json`;
-		a.click();
-		URL.revokeObjectURL(url);
-	}
-
 	const filteredLogs = $derived(
-		logs.filter((log) => {
+		$logStore.logs.filter((log) => {
 			if (filter !== 'all' && log.level !== filter) return false;
 			if (search && !log.message.toLowerCase().includes(search.toLowerCase())) return false;
 			return true;
@@ -123,12 +49,11 @@
 	function animateRow(node: HTMLDivElement) {
 		const prefersReduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 		if (prefersReduced) return;
- // -ignore
 		(animate as any)(node as any, { opacity: [0, 1], x: [-8, 0] }, { duration: 0.25, easing: "ease-out" });
 	}
 </script>
 
-<PageHeader title="Logs" subtitle="Live log stream — buffered every {streamInterval}ms">
+<PageHeader title="Logs" subtitle="Live log stream — buffered every {$logStore.streamInterval}ms">
 	<div class="flex flex-wrap items-center gap-2">
 		<div class="flex items-center gap-2 rounded-full border-2 border-black bg-white px-2 py-1 shadow-sm dark:bg-black dark:border-zinc-700">
 			<Timer class="h-4 w-4 text-muted-foreground" aria-hidden="true" />
@@ -136,7 +61,8 @@
 			<div class="relative">
 				<select
 					id="log-interval"
-					bind:value={streamInterval}
+					value={$logStore.streamInterval}
+					onchange={(e) => logStore.setInterval(Number((e.target as HTMLSelectElement).value))}
 					class="appearance-none bg-transparent pr-6 pl-2 py-0.5 text-xs font-bold rounded-full focus:outline-none cursor-pointer"
 					aria-label="Stream interval"
 				>
@@ -147,17 +73,17 @@
 				<ChevronDown class="pointer-events-none absolute right-1 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" aria-hidden="true" />
 			</div>
 		</div>
-		<Button variant="outline" size="sm" onclick={() => { logs = []; buffer = []; }} aria-label="Clear logs">
+		<Button variant="outline" size="sm" onclick={() => logStore.clear()} aria-label="Clear logs">
 			<Trash2 class="h-4 w-4" />
 			Clear
 		</Button>
-		<Button variant="outline" size="sm" onclick={exportLogs} aria-label="Export logs">
+		<Button variant="outline" size="sm" onclick={() => logStore.exportLogs()} aria-label="Export logs">
 			<Download class="h-4 w-4" />
 			Export
 		</Button>
-		<Button variant={paused ? "default" : "outline"} size="sm" onclick={() => paused = !paused} aria-pressed={paused}>
-			{#if paused}<Play class="h-4 w-4" />{:else}<Pause class="h-4 w-4" />{/if}
-			{paused ? 'Resume' : 'Pause'}
+		<Button variant={$logStore.paused ? "default" : "outline"} size="sm" onclick={() => logStore.setPaused(!$logStore.paused)} aria-pressed={$logStore.paused}>
+			{#if $logStore.paused}<Play class="h-4 w-4" />{:else}<Pause class="h-4 w-4" />{/if}
+			{$logStore.paused ? 'Resume' : 'Pause'}
 		</Button>
 	</div>
 </PageHeader>
@@ -193,7 +119,7 @@
 					<ScrollText class="h-6 w-6 text-zinc-500" aria-hidden="true" />
 				</span>
 				<p class="text-sm font-mono font-semibold">No log entries to display</p>
-				<p class="text-xs font-mono text-zinc-500">Buffer flush every {streamInterval}ms — {buffer.length} buffered</p>
+				<p class="text-xs font-mono text-zinc-500">Buffer flush every {$logStore.streamInterval}ms — {$logStore.buffer.length} buffered • {$logStore.connectionStatus}</p>
 			</div>
 		{:else}
 			{#each filteredLogs as entry, i (i)}
@@ -214,5 +140,5 @@
 </Card>
 
 <p class="mt-2 text-xs font-mono text-muted-foreground">
-	Showing {filteredLogs.length} of {logs.length} • {buffer.length} buffered • interval {streamInterval}ms • {paused ? 'paused' : 'live'}
+	Showing {filteredLogs.length} of {$logStore.logs.length} • {$logStore.buffer.length} buffered • interval {$logStore.streamInterval}ms • {$logStore.paused ? 'paused' : 'live'} • {$logStore.connectionStatus}
 </p>

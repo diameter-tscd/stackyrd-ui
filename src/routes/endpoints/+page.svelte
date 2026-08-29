@@ -18,6 +18,7 @@
 	let expandedService = $state<string | null>(null);
 
 	onMount(async () => {
+		if (!$auth.authenticated) return;
 		await fetchEndpoints();
 		polling = setInterval(fetchEndpoints, 30000);
 	});
@@ -26,7 +27,12 @@
 		if (polling) clearInterval(polling);
 	});
 
+	$effect(() => {
+		if (!$auth.authenticated && polling) { clearInterval(polling); polling = null; }
+	});
+
 	async function fetchEndpoints() {
+		if (!$auth.authenticated) return;
 		try {
 			const res = await getMCPEndpoints($auth.token);
 			if (res.data) endpoints.set(res.data);

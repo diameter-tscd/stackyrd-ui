@@ -17,6 +17,7 @@
 	let polling: ReturnType<typeof setInterval> | null = null;
 
 	onMount(async () => {
+		if (!$auth.authenticated) return;
 		await fetchInfra();
 		polling = setInterval(fetchInfra, 5000);
 	});
@@ -25,7 +26,12 @@
 		if (polling) clearInterval(polling);
 	});
 
+	$effect(() => {
+		if (!$auth.authenticated && polling) { clearInterval(polling); polling = null; }
+	});
+
 	async function fetchInfra() {
+		if (!$auth.authenticated) return;
 		try {
 			const res = await getMCPInfra($auth.token);
 			if (res.data) infra.set(res.data);

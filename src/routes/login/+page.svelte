@@ -3,7 +3,7 @@
 	import { goto } from '$app/navigation';
 	import { auth, toasts } from '$lib/stores/auth';
 	import { connectionStatus } from '$lib/stores/data';
-	import { getHealth } from '$lib/api/endpoints';
+	import { mcpCall } from '$lib/api/mcp';
 	import Button from '$lib/components/ui/Button.svelte';
 	import Card from '$lib/components/ui/Card.svelte';
 	import CardContent from '$lib/components/ui/card-content.svelte';
@@ -14,42 +14,79 @@
 	import Label from '$lib/components/ui/label.svelte';
 	import Separator from '$lib/components/ui/separator.svelte';
 	import Spinner from '$lib/components/ui/Spinner.svelte';
-	import { PUBLIC_API_URL, PUBLIC_MCP_URL } from '$env/static/public';
-	import { Eye, EyeOff } from 'lucide-svelte';
+	import Alert from '$lib/components/ui/alert.svelte';
+	import AlertTitle from '$lib/components/ui/alert-title.svelte';
+	import AlertDescription from '$lib/components/ui/alert-description.svelte';
+	import { env } from '$env/dynamic/public';
+	import { Eye, EyeOff, ShieldAlert } from 'lucide-svelte';
+
+	const PUBLIC_API_URL = env.PUBLIC_API_URL || 'http://localhost:8080';
 
 	let apiUrl = $state(PUBLIC_API_URL);
 	let token = $state('');
 	let loading = $state(false);
 	let remember = $state(true);
 	let showToken = $state(false);
+	let sessionChecking = $state(true);
+	let tokenError = $state('');
 
-	onMount(() => {
-		if ($auth.authenticated) {
-			goto('/');
+	let checkingToken: string | null = null;
+
+	onMount(async () => {
+		if ($auth.apiUrl) apiUrl = $auth.apiUrl;
+		if ($auth.authenticated && $auth.token) {
+			checkingToken = $auth.token;
+			try {
+				await mcpCall(checkingToken, 'ping');
+				await goto('/', { replaceState: true });
+				return;
+			} catch {
+				if (checkingToken !== $auth.token) return;
+				auth.logout();
+				connectionStatus.set('disconnected');
+				tokenError = 'Invalid token — session expired or token is not authorized. Please sign in again.';
+			} finally {
+				checkingToken = null;
+			}
+		} else if ($auth.authenticated) {
+			auth.logout();
 		}
-		if ($auth.apiUrl) {
-			apiUrl = $auth.apiUrl;
-		}
+		sessionChecking = false;
 	});
 
 	async function handleLogin() {
 		if (!token.trim()) {
-			toasts.add('error', 'Please enter an API token');
+			tokenError = 'Please enter an API token';
 			return;
 		}
+		tokenError = '';
 		loading = true;
 		connectionStatus.set('checking');
+		const attemptToken = token.trim();
 		try {
-			await getHealth(token);
-			auth.setToken(token);
+			await mcpCall(attemptToken, 'ping');
+			auth.setToken(attemptToken);
 			auth.setUrls(apiUrl, '/mcp');
 			auth.setAuthenticated(true);
 			connectionStatus.set('connected');
 			toasts.add('success', 'Connected successfully');
-			goto('/');
-		} catch {
+			await goto('/', { replaceState: true });
+		} catch (e) {
+			const msg = (e as Error)?.message || '';
+			const raw = String((e as { data?: unknown })?.data ?? msg).toLowerCase();
+			const isAuth =
+				msg.toLowerCase().includes('unauthorized') ||
+				msg.toLowerCase().includes('401') ||
+				msg.toLowerCase().includes('403') ||
+				msg.toLowerCase().includes('invalid token') ||
+				msg.toLowerCase().includes('forbidden') ||
+				msg.toLowerCase().includes('unauthenticated') ||
+				raw.includes('unauthorized') ||
+				raw.includes('forbidden');
+			tokenError = isAuth
+				? 'Invalid token — not authorized. Please check your token and try again.'
+				: 'Failed to connect. Check your token and API URL.';
 			connectionStatus.set('disconnected');
-			toasts.add('error', 'Failed to connect. Check your token and API URL.');
 		} finally {
 			loading = false;
 		}
@@ -69,6 +106,19 @@
 				<CardDescription>Enter your API URL and bearer token to continue</CardDescription>
 			</CardHeader>
 			<CardContent class="space-y-4">
+				{#if sessionChecking}
+					<div class="flex flex-col items-center justify-center py-8 gap-3">
+						<Spinner size="sm" />
+						<p class="text-xs font-semibold text-muted-foreground">Verifying session…</p>
+					</div>
+				{:else}
+				{#if tokenError}
+					<Alert variant="destructive" class="bg-red-600 text-white border-red-600 [&>svg]:text-white dark:bg-red-600 dark:text-white dark:border-red-600 [&>svg]:dark:text-white">
+						<ShieldAlert class="h-4 w-4 text-white" />
+						<AlertTitle class="text-sm font-bold text-white">Invalid token</AlertTitle>
+						<AlertDescription class="text-xs font-semibold text-white">{tokenError}</AlertDescription>
+					</Alert>
+				{/if}
 				<form autocomplete="off" onsubmit={(e) => { e.preventDefault(); handleLogin(); }} class="space-y-4">
 					<div class="space-y-3">
 						<Label for="login-api-url">API URL</Label>
@@ -105,7 +155,7 @@
 
 					<Separator />
 
-					<Button variant="default" class="w-full" type="submit" onclick={handleLogin} disabled={loading} aria-busy={loading}>
+					<Button variant="default" class="w-full" type="submit" disabled={loading || sessionChecking} aria-busy={loading}>
 						{#if loading}
 							<Spinner size="sm" />
 							<span>Connecting...</span>
@@ -114,6 +164,7 @@
 						{/if}
 					</Button>
 				</form>
+				{/if}
 			</CardContent>
 		</Card>
 
