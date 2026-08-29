@@ -82,10 +82,10 @@ const VALID_THEMES: ThemeName[] = ['light', 'dark', 'night'];
 export const theme = writable<ThemeName>(loadTheme());
 
 function loadTheme(): ThemeName {
-	if (!browser) return 'dark';
+	if (!browser) return 'light';
 	const stored = localStorage.getItem('stackyrd_theme');
 	if (stored && (VALID_THEMES as string[]).includes(stored)) return stored as ThemeName;
-	return 'dark';
+	return 'light';
 }
 
 function applyTheme(value: ThemeName) {
