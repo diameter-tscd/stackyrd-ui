@@ -10,33 +10,21 @@
 	import ConnectionAlert from '$lib/components/ui/connection-alert.svelte';
 	import { sidebarCollapsed } from '$lib/stores/auth';
 	import { logStore } from '$lib/stores/logs';
-	import { health, connectionStatus } from '$lib/stores/data';
-	import { getHealth } from '$lib/api/endpoints';
+	import { connectionStatus } from '$lib/stores/data';
+	import { mcpPoller } from '$lib/stores/mcpPoller';
 	import { fly } from 'svelte/transition';
 	import { cubicOut } from 'svelte/easing';
 
 	let { children } = $props();
 
 	let reduceMotion = $state(false);
-	let healthPolling: ReturnType<typeof setInterval> | null = null;
-
-	async function checkHealth() {
-		if (!$auth.authenticated) return;
-		try {
-			const res = await getHealth($auth.token);
-			if (res?.data) health.set(res.data);
-			connectionStatus.set('connected');
-		} catch {
-			connectionStatus.set('disconnected');
-		}
-	}
 
 	onMount(() => {
 		reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 		if ($auth.authenticated) {
 			logStore.start();
-			checkHealth();
-			healthPolling = setInterval(checkHealth, 10000);
+			mcpPoller.start();
+			mcpPoller.startGoroutinePolling();
 		} else {
 			logStore.stop();
 			connectionStatus.set('checking');
@@ -44,7 +32,7 @@
 	});
 
 	onDestroy(() => {
-		if (healthPolling) clearInterval(healthPolling);
+		mcpPoller.stop();
 	});
 
 	$effect(() => {
@@ -53,13 +41,11 @@
 		}
 		if ($auth.authenticated) {
 			logStore.start();
-			if (!healthPolling) {
-				checkHealth();
-				healthPolling = setInterval(checkHealth, 10000);
-			}
+			mcpPoller.start();
+			mcpPoller.startGoroutinePolling();
 		} else {
 			logStore.stop();
-			if (healthPolling) { clearInterval(healthPolling); healthPolling = null; }
+			mcpPoller.stop();
 			connectionStatus.set('checking');
 		}
 	});

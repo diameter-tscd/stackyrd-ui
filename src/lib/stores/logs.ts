@@ -6,10 +6,12 @@ export interface LogState {
 	buffer: LogEntry[];
 	paused: boolean;
 	streamInterval: number;
+	realtime: boolean;
 	connectionStatus: 'connecting' | 'open' | 'closed' | 'error';
 }
 
 const MAX_LOGS = 2000;
+const REALTIME = 0;
 
 function createLogStore() {
 	const { subscribe, update } = writable<LogState>({
@@ -17,6 +19,7 @@ function createLogStore() {
 		buffer: [],
 		paused: false,
 		streamInterval: 1000,
+		realtime: false,
 		connectionStatus: 'closed'
 	});
 
@@ -44,6 +47,7 @@ function createLogStore() {
 			});
 		};
 		const ms = getInterval();
+		if (ms === REALTIME) return;
 		flushTimer = window.setInterval(tick, ms);
 	}
 
@@ -71,7 +75,7 @@ function createLogStore() {
 				};
 				if (!entry.message) return;
 				update((s) => {
-					if (s.streamInterval <= 500) {
+					if (s.realtime || s.streamInterval <= 500) {
 						const next = [...s.logs.slice(-MAX_LOGS + 1), entry].slice(-MAX_LOGS);
 						return { ...s, logs: next };
 					}
@@ -118,7 +122,8 @@ function createLogStore() {
 	}
 
 	function setInterval(ms: number) {
-		update((s) => ({ ...s, streamInterval: ms }));
+		const realtime = ms === REALTIME;
+		update((s) => ({ ...s, streamInterval: ms, realtime }));
 		if (flushTimer) clearInterval(flushTimer);
 		startFlushTimer();
 	}

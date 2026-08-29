@@ -13,7 +13,9 @@ import type {
 	EndpointMeta,
 	UptimeData,
 	ResourceData,
-	InstanceIdentity
+	InstanceIdentity,
+	MemoryData,
+	GoroutineDump
 } from '$lib/types/api';
 
 function effToken(token: string | null): string | null {
@@ -71,8 +73,16 @@ export async function getMCPIdentity(token: string | null): Promise<ApiResponse<
 	return mcpToolsCall(effToken(token), 'stackyrd_identity') as Promise<ApiResponse<InstanceIdentity>>;
 }
 
+export async function getMCPMemory(token: string | null): Promise<ApiResponse<MemoryData>> {
+	return mcpToolsCall(effToken(token), 'stackyrd_memory') as Promise<ApiResponse<MemoryData>>;
+}
+
 export async function getMCPCluster(token: string | null): Promise<ApiResponse<{ members: InstanceIdentity[] }>> {
 	return mcpToolsCall(effToken(token), 'stackyrd_cluster') as Promise<ApiResponse<{ members: InstanceIdentity[] }>>;
+}
+
+export async function getMCPGoroutines(token: string | null): Promise<ApiResponse<GoroutineDump>> {
+	return mcpToolsCall(effToken(token), 'stackyrd_goroutines') as Promise<ApiResponse<GoroutineDump>>;
 }
 
 export async function getMCPServices(token: string | null): Promise<ApiResponse<ServiceMeta[]>> {

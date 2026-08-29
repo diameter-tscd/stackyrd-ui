@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { onMount, onDestroy } from 'svelte';
 	import { auth } from '$lib/stores/auth';
 	import { services } from '$lib/stores/data';
 	import { getMCPServices } from '$lib/api/endpoints';
@@ -15,29 +14,18 @@
 
 	let loading = $state(true);
 	let filter = $state<'all' | 'running' | 'failed' | 'disabled'>('all');
-	let polling: ReturnType<typeof setInterval> | null = null;
-
-	onMount(async () => {
-		if (!$auth.authenticated) return;
-		await fetchServices();
-		polling = setInterval(() => fetchServices(), 15000);
-	});
-
-	onDestroy(() => {
-		if (polling) clearInterval(polling);
-	});
 
 	$effect(() => {
-		if (!$auth.authenticated && polling) { clearInterval(polling); polling = null; }
+		if ($services.length > 0) loading = false;
 	});
 
-	async function fetchServices() {
+	async function refreshServices() {
 		if (!$auth.authenticated) return;
 		try {
 			const res = await getMCPServices($auth.token);
 			if (res.data) services.set(res.data);
 		} catch {
-			// silent fail on poll
+			// silent fail
 		} finally {
 			loading = false;
 		}
@@ -65,7 +53,7 @@
 </script>
 
 <PageHeader title="Services" subtitle="{$services.length} services discovered">
-	<Button variant="outline" size="sm" onclick={fetchServices} aria-label="Refresh services">
+	<Button variant="outline" size="sm" onclick={refreshServices} aria-label="Refresh services">
 		<RefreshCw class="h-4 w-4" />
 		Refresh
 	</Button>

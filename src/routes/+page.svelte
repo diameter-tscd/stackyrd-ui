@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
 	import { auth } from '$lib/stores/auth';
-	import { health, services, infra, mcpUptime, resources, instanceIdentity, mcpInstanceId, connectionStatus } from '$lib/stores/data';
-	import { getHealth, getMCPServices, getMCPInfra, getMCPUpTime, getMCPResources, getMCPIdentity } from '$lib/api/endpoints';
+	import { health, services, infra, mcpUptime, resources, instanceIdentity, memory, mcpInstanceId, connectionStatus } from '$lib/stores/data';
+	import { mcpPoller } from '$lib/stores/mcpPoller';
 	import PageHeader from '$lib/components/layout/PageHeader.svelte';
 	import Card from '$lib/components/ui/Card.svelte';
 	import CardHeader from '$lib/components/ui/card-header.svelte';
@@ -16,100 +16,24 @@
 	import AlertTitle from '$lib/components/ui/alert-title.svelte';
 	import AlertDescription from '$lib/components/ui/alert-description.svelte';
 	import { Server, HardDrive, AlertTriangle, Activity, Cpu, MemoryStick, Hash, Boxes, Monitor, Fingerprint, Globe, Building2, HardDriveIcon as DriveIcon } from 'lucide-svelte';
+	import MemoryViz from '$lib/components/ui/MemoryViz.svelte';
 
-	let polling: ReturnType<typeof setInterval> | null = null;
 	let ticker: ReturnType<typeof setInterval> | null = null;
 	let now = $state(Date.now());
-	let healthFetchedAt = $state<number | null>(null);
-	let mcpUptimeFetchedAt = $state<number | null>(null);
 	let firstSeenAt = $state<number | null>(null);
 
-	onMount(async () => {
-		if (!$auth.authenticated) return;
-		await pollData();
-		polling = setInterval(pollData, 10000);
+	onMount(() => {
+		if ($auth.authenticated && firstSeenAt === null) firstSeenAt = Date.now();
 		ticker = setInterval(() => (now = Date.now()), 1000);
 	});
 
 	onDestroy(() => {
-		if (polling) clearInterval(polling);
 		if (ticker) clearInterval(ticker);
 	});
 
 	$effect(() => {
-		if (!$auth.authenticated) {
-			if (polling) { clearInterval(polling); polling = null; }
-			if (ticker) { clearInterval(ticker); ticker = null; }
-		} else {
-			if (!polling) {
-				pollData();
-				polling = setInterval(pollData, 10000);
-			}
-			if (!ticker) {
-				ticker = setInterval(() => (now = Date.now()), 1000);
-			}
-		}
+		if ($auth.authenticated && firstSeenAt === null) firstSeenAt = Date.now();
 	});
-
-	async function pollData() {
-		if (!$auth.authenticated) return;
-		const results = await Promise.allSettled([
-			getHealth($auth.token),
-			getMCPServices($auth.token),
-			getMCPInfra($auth.token),
-			getMCPUpTime($auth.token),
-			getMCPResources($auth.token),
-			getMCPIdentity($auth.token)
-		]);
-		const [hRes, sRes, iRes, uRes, rRes, idRes] = results;
-		let hasSuccess = false;
-		let hasFailure = false;
-		if (hRes.status === 'fulfilled' && hRes.value?.data) {
-			health.set(hRes.value.data);
-			healthFetchedAt = Date.now();
-			if (firstSeenAt === null) firstSeenAt = healthFetchedAt;
-			hasSuccess = true;
-		} else {
-			hasFailure = true;
-		}
-		if (sRes.status === 'fulfilled' && sRes.value?.data) {
-			services.set(sRes.value.data);
-			hasSuccess = true;
-		} else {
-			hasFailure = true;
-		}
-		if (iRes.status === 'fulfilled' && iRes.value?.data) {
-			infra.set(iRes.value.data);
-			hasSuccess = true;
-		} else {
-			hasFailure = true;
-		}
-		if (uRes.status === 'fulfilled' && uRes.value?.data) {
-			mcpUptime.set(uRes.value.data);
-			mcpUptimeFetchedAt = Date.now();
-			if (firstSeenAt === null) firstSeenAt = mcpUptimeFetchedAt;
-			hasSuccess = true;
-		} else {
-			if (uRes.status === 'rejected' || (uRes.status === 'fulfilled' && !uRes.value?.data)) {
-				hasFailure = true;
-			}
-		}
-		if (rRes.status === 'fulfilled' && rRes.value?.data) {
-			resources.set(rRes.value.data);
-			hasSuccess = true;
-		} else {
-			hasFailure = true;
-		}
-		if (idRes.status === 'fulfilled' && idRes.value?.data) {
-			instanceIdentity.set(idRes.value.data);
-			hasSuccess = true;
-		} else {
-			hasFailure = true;
-		}
-		if (hasSuccess && !hasFailure) connectionStatus.set('connected');
-		else if (hasSuccess && hasFailure) connectionStatus.set('connected');
-		else connectionStatus.set('disconnected');
-	}
 
 	const runningServices = $derived($services.filter((s) => s.status === 'running').length);
 	const failedServices = $derived($services.filter((s) => s.status === 'failed').length);
@@ -178,7 +102,7 @@
 
 	const healthUptimeMs = $derived.by(() => {
 		const base = rawUptimeMs;
-		if (base !== null && healthFetchedAt !== null) return base + (now - healthFetchedAt);
+		if (base !== null) return base;
 		return null;
 	});
 
@@ -188,11 +112,11 @@
 		const startMs = parseTimestampMs(u.started_at);
 		if (startMs !== null) return now - startMs;
 		if (typeof u.uptime_seconds === 'number' && Number.isFinite(u.uptime_seconds)) {
-			return u.uptime_seconds * 1000 + (mcpUptimeFetchedAt !== null ? now - mcpUptimeFetchedAt : 0);
+			return u.uptime_seconds * 1000 + (mcpPoller.uptimeFetchedAt !== null ? now - mcpPoller.uptimeFetchedAt : 0);
 		}
 		if (typeof u.uptime === 'string') {
 			const p = parseGoDuration(u.uptime);
-			if (p !== null) return p + (mcpUptimeFetchedAt !== null ? now - mcpUptimeFetchedAt : 0);
+			if (p !== null) return p + (mcpPoller.uptimeFetchedAt !== null ? now - mcpPoller.uptimeFetchedAt : 0);
 		}
 		if (typeof (u as unknown as Record<string, unknown>).started_at_unix === 'number') {
 			const unix = (u as unknown as Record<string, unknown>).started_at_unix as number;
@@ -254,7 +178,7 @@
 		<div class="flex flex-col items-center justify-center py-16 gap-3">
 			<Activity class="h-8 w-8 text-muted-foreground opacity-50" aria-hidden="true" />
 			<p class="text-sm text-muted-foreground">Unable to load overview — server unreachable</p>
-			<button class="text-sm text-primary hover:underline" onclick={pollData}>Retry</button>
+			<button class="text-sm text-primary hover:underline" onclick={() => mcpPoller.start()}>Retry</button>
 		</div>
 	{:else}
 		<div class="flex items-center justify-center py-20" role="status" aria-label="Loading overview">
@@ -279,7 +203,9 @@
 		</StatCard>
 	</div>
 
-	<Card>
+	<MemoryViz data={$memory} />
+
+	<Card class="mt-5">
 		<CardHeader class="pb-3">
 			<div class="flex items-center gap-2">
 				<Cpu class="h-5 w-5 text-emerald-500" aria-hidden="true" />

@@ -163,4 +163,88 @@ export interface InstanceIdentity {
 	started_at: string;
 }
 
+export interface MemoryThreshold {
+	level: string;
+	label: string;
+	min: number;
+	max: number;
+	color: string;
+	bg: string;
+}
+
+export interface MemoryGauge {
+	percent: number;
+	normalized: number;
+	status: { level: string; label: string; color: string };
+}
+
+export interface MemoryData {
+	system: {
+		total_bytes: number;
+		total_mib: number;
+		total_gib: number;
+		available_bytes: number;
+		available_mib: number;
+		used_bytes: number;
+		used_mib: number;
+		free_bytes: number;
+		free_mib: number;
+		buffers_mib: number;
+		cached_mib: number;
+		used_percent: number;
+		available_percent: number;
+		free_percent: number;
+	};
+	app: {
+		alloc_mib: number;
+		alloc_bytes: number;
+		total_alloc_mib: number;
+		sys_mib: number;
+		sys_bytes: number;
+		heap_alloc_mib: number;
+		heap_sys_mib: number;
+		heap_idle_mib: number;
+		heap_inuse_mib: number;
+		heap_released_mib: number;
+		heap_objects: number;
+		stack_inuse_mib: number;
+		stack_sys_mib: number;
+		gc_sys_mib: number;
+		gc_cpu_fraction: number;
+		num_gc: number;
+		num_goroutine: number;
+		self_mib: number;
+	};
+	visualization: {
+		thresholds: MemoryThreshold[];
+		scale: { value: number; label: string }[];
+		gauge: MemoryGauge;
+		status: { level: string; label: string; color: string };
+	};
+	used_percent: number;
+	status: { level: string; label: string; color: string };
+}
+
+export interface GoroutineInfo {
+	id: number;
+	function: string;
+	state: string;
+	stack: string;
+}
+
+export interface GoroutineDump {
+	count: number;
+	returned: number;
+	truncated: boolean;
+	filter: string;
+	states: Record<string, number>;
+	goroutines: GoroutineInfo[];
+}
+
+export interface GoroutineDataPoint {
+	timestamp: number;
+	count: number;
+	states: Record<string, number>;
+}
+
 export type ThemePreset = 'dark' | 'midnight' | 'terminal' | 'slate' | 'ember';

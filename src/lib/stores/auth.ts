@@ -1,7 +1,7 @@
 import { writable, derived, type Readable } from 'svelte/store';
 import { browser } from '$app/environment';
 import { logStore } from './logs';
-import { health, services, infra, resources, instanceIdentity, mcpUptime, mcpInstanceId, connectionStatus } from './data';
+import { health, services, infra, resources, instanceIdentity, mcpUptime, mcpInstanceId, connectionStatus, goroutineDump, goroutineHistory } from './data';
 
 export interface AuthState {
 	token: string;
@@ -62,6 +62,8 @@ function createAuthStore() {
 				try { instanceIdentity.set(null); } catch {}
 				try { mcpUptime.set(null); } catch {}
 				try { mcpInstanceId.set(null); } catch {}
+				try { goroutineDump.set(null); } catch {}
+				try { goroutineHistory.set([]); } catch {}
 				try { connectionStatus.set('checking'); } catch {}
 				try {
 					update(() => ({ token: '', apiUrl: '', mcpUrl: '', authenticated: false, lastChecked: null }));

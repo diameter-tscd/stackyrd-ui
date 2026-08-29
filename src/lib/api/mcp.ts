@@ -17,7 +17,7 @@ interface JSONRPCResponse {
 	error?: { code: number; message: string };
 }
 
-function resolveMcpUrl(endpoint?: string): string {
+export function resolveMcpUrl(endpoint?: string): string {
 	if (endpoint) return endpoint;
 	if (browser) {
 		try {

@@ -13,7 +13,17 @@
 	let autoScroll = $state(true);
 	let logContainer: HTMLDivElement | null = null;
 
-	const intervalOptions = [500, 1000, 2000, 5000];
+	const intervalOptions: Array<{ value: number; label: string }> = [
+		{ value: 0, label: 'Realtime' },
+		{ value: 500, label: '500ms' },
+		{ value: 1000, label: '1000ms' },
+		{ value: 2000, label: '2000ms' },
+		{ value: 5000, label: '5000ms' }
+	];
+
+	const currentIntervalLabel = $derived(
+		intervalOptions.find((o) => o.value === $logStore.streamInterval)?.label ?? '1000ms'
+	);
 
 	onMount(() => {
 		logStore.start();
@@ -53,7 +63,7 @@
 	}
 </script>
 
-<PageHeader title="Logs" subtitle="Live log stream — buffered every {$logStore.streamInterval}ms">
+<PageHeader title="Logs" subtitle="Live log stream — {$logStore.realtime ? 'realtime' : `buffered every ${$logStore.streamInterval}ms`}">
 	<div class="flex flex-wrap items-center gap-2">
 		<div class="flex items-center gap-2 rounded-full border-2 border-black bg-white px-2 py-1 shadow-sm dark:bg-black dark:border-zinc-700">
 			<Timer class="h-4 w-4 text-muted-foreground" aria-hidden="true" />
@@ -66,8 +76,8 @@
 					class="appearance-none bg-transparent pr-6 pl-2 py-0.5 text-xs font-bold rounded-full focus:outline-none cursor-pointer"
 					aria-label="Stream interval"
 				>
-					{#each intervalOptions as ms}
-						<option value={ms}>{ms}ms</option>
+					{#each intervalOptions as opt}
+						<option value={opt.value}>{opt.label}</option>
 					{/each}
 				</select>
 				<ChevronDown class="pointer-events-none absolute right-1 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" aria-hidden="true" />
@@ -119,7 +129,7 @@
 					<ScrollText class="h-6 w-6 text-zinc-500" aria-hidden="true" />
 				</span>
 				<p class="text-sm font-mono font-semibold">No log entries to display</p>
-				<p class="text-xs font-mono text-zinc-500">Buffer flush every {$logStore.streamInterval}ms — {$logStore.buffer.length} buffered • {$logStore.connectionStatus}</p>
+				<p class="text-xs font-mono text-zinc-500">{$logStore.realtime ? 'Realtime — no buffering' : `Buffer flush every ${$logStore.streamInterval}ms`} — {$logStore.buffer.length} buffered • {$logStore.connectionStatus}</p>
 			</div>
 		{:else}
 			{#each filteredLogs as entry, i (i)}
@@ -140,5 +150,5 @@
 </Card>
 
 <p class="mt-2 text-xs font-mono text-muted-foreground">
-	Showing {filteredLogs.length} of {$logStore.logs.length} • {$logStore.buffer.length} buffered • interval {$logStore.streamInterval}ms • {$logStore.paused ? 'paused' : 'live'} • {$logStore.connectionStatus}
+	Showing {filteredLogs.length} of {$logStore.logs.length} • {$logStore.buffer.length} buffered • {$logStore.realtime ? 'realtime' : `interval ${$logStore.streamInterval}ms`} • {$logStore.paused ? 'paused' : 'live'} • {$logStore.connectionStatus}
 </p>

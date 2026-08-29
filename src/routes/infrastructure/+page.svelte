@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { onMount, onDestroy } from 'svelte';
 	import { auth } from '$lib/stores/auth';
 	import { infra, connectionStatus } from '$lib/stores/data';
 	import { getMCPInfra } from '$lib/api/endpoints';
@@ -14,23 +13,12 @@
 	import { goto } from '$app/navigation';
 
 	let loading = $state(true);
-	let polling: ReturnType<typeof setInterval> | null = null;
-
-	onMount(async () => {
-		if (!$auth.authenticated) return;
-		await fetchInfra();
-		polling = setInterval(fetchInfra, 5000);
-	});
-
-	onDestroy(() => {
-		if (polling) clearInterval(polling);
-	});
 
 	$effect(() => {
-		if (!$auth.authenticated && polling) { clearInterval(polling); polling = null; }
+		if ($infra.length > 0) loading = false;
 	});
 
-	async function fetchInfra() {
+	async function refreshInfra() {
 		if (!$auth.authenticated) return;
 		try {
 			const res = await getMCPInfra($auth.token);
@@ -53,8 +41,8 @@
 	}
 </script>
 
-<PageHeader title="Infrastructure" subtitle="Component status and connections">
-	<Button variant="outline" size="sm" onclick={fetchInfra} aria-label="Refresh infrastructure">
+<PageHeader title="Infrastructure" subtitle="{$infra.length} components monitored">
+	<Button variant="outline" size="sm" onclick={refreshInfra} aria-label="Refresh infrastructure">
 		<RefreshCw class="h-4 w-4" />
 		Refresh
 	</Button>
@@ -65,7 +53,7 @@
 		<Spinner size="lg" />
 	</div>
 {:else if $infra.length === 0}
-	<EmptyState title="No infrastructure" message="No infrastructure components discovered" icon={PlugZap} description="Components will appear once connected to Redis, Postgres, Kafka and others" />
+	<EmptyState title="No infrastructure" message="No infrastructure components discovered" icon={PlugZap} />
 {:else}
 	<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
 		{#each $infra as component}
@@ -73,8 +61,8 @@
 				<CardContent class="p-7">
 					<div class="flex items-start justify-between mb-4">
 						<div class="flex items-center gap-2 min-w-0">
-							<span class="flex h-8 w-8 items-center justify-center rounded-md bg-violet-500/10 shrink-0">
-								<HardDrive class="h-4 w-4 text-violet-500" aria-hidden="true" />
+							<span class="flex h-8 w-8 items-center justify-center rounded-md bg-primary/10 shrink-0">
+								<HardDrive class="h-4 w-4 text-primary" aria-hidden="true" />
 							</span>
 							<h3 class="text-sm font-semibold leading-none truncate">{component.name}</h3>
 						</div>
@@ -87,14 +75,8 @@
 						</div>
 						<div class="flex justify-between gap-5">
 							<dt class="text-muted-foreground">Last Check</dt>
-							<dd class="text-muted-foreground truncate">{component.last_check || 'Never'}</dd>
+							<dd class="font-mono font-medium truncate">{component.last_check || '—'}</dd>
 						</div>
-						{#if component.details.host}
-							<div class="flex justify-between gap-5">
-								<dt class="text-muted-foreground">Host</dt>
-								<dd class="font-mono font-medium truncate">{component.details.host}:{component.details.port}</dd>
-							</div>
-						{/if}
 					</dl>
 				</CardContent>
 			</Card>
