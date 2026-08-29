@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { onMount, onDestroy } from 'svelte';
 	import { auth } from '$lib/stores/auth';
 	import { getMetrics } from '$lib/api/endpoints';
 	import PageHeader from '$lib/components/layout/PageHeader.svelte';
@@ -18,24 +17,9 @@
 	let loading = $state(true);
 	let rawMetrics = $state('');
 	let showRaw = $state(false);
-	let polling: ReturnType<typeof setInterval> | null = null;
 	let unavailable = $state(false);
 	let errorMessage = $state('');
 	let statusCode: number | null = $state(null);
-
-	onMount(async () => {
-		if (!$auth.authenticated) return;
-		await fetchMetrics();
-		polling = setInterval(fetchMetrics, 10000);
-	});
-
-	onDestroy(() => {
-		if (polling) clearInterval(polling);
-	});
-
-	$effect(() => {
-		if (!$auth.authenticated && polling) { clearInterval(polling); polling = null; }
-	});
 
 	async function fetchMetrics() {
 		if (!$auth.authenticated) return;

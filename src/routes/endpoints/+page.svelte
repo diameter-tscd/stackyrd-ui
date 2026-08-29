@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { onMount, onDestroy } from 'svelte';
 	import { auth } from '$lib/stores/auth';
 	import { endpoints } from '$lib/stores/data';
 	import { getMCPEndpoints } from '$lib/api/endpoints';
@@ -14,24 +13,13 @@
 	import { Route, RefreshCw, ChevronDown, ChevronRight } from 'lucide-svelte';
 
 	let loading = $state(true);
-	let polling: ReturnType<typeof setInterval> | null = null;
 	let expandedService = $state<string | null>(null);
 
-	onMount(async () => {
-		if (!$auth.authenticated) return;
-		await fetchEndpoints();
-		polling = setInterval(fetchEndpoints, 30000);
-	});
-
-	onDestroy(() => {
-		if (polling) clearInterval(polling);
-	});
-
 	$effect(() => {
-		if (!$auth.authenticated && polling) { clearInterval(polling); polling = null; }
+		if ($endpoints) loading = false;
 	});
 
-	async function fetchEndpoints() {
+	async function refreshEndpoints() {
 		if (!$auth.authenticated) return;
 		try {
 			const res = await getMCPEndpoints($auth.token);
@@ -43,20 +31,13 @@
 		}
 	}
 
-	function methodColor(method: string) {
-		switch (method) {
-			case 'GET': return 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30';
-			case 'POST': return 'text-sky-400 bg-sky-500/10 border-sky-500/30';
-			case 'PUT': return 'text-amber-400 bg-amber-500/10 border-amber-500/30';
-			case 'PATCH': return 'text-violet-400 bg-violet-500/10 border-violet-500/30';
-			case 'DELETE': return 'text-rose-400 bg-rose-500/10 border-rose-500/30';
-			default: return 'text-muted-foreground bg-muted border-border';
-		}
+	function toggleExpand(service: string) {
+		expandedService = expandedService === service ? null : service;
 	}
 </script>
 
-<PageHeader title="Endpoints" subtitle="{$endpoints?.total ?? 0} API endpoints discovered">
-	<Button variant="outline" size="sm" onclick={fetchEndpoints} aria-label="Refresh endpoints">
+<PageHeader title="Endpoints" subtitle="{$endpoints?.total ?? 0} endpoints across {$endpoints?.services?.length ?? 0} services">
+	<Button variant="outline" size="sm" onclick={refreshEndpoints} aria-label="Refresh endpoints">
 		<RefreshCw class="h-4 w-4" />
 		Refresh
 	</Button>
@@ -67,42 +48,35 @@
 		<Spinner size="lg" />
 	</div>
 {:else if !$endpoints || $endpoints.services.length === 0}
-	<EmptyState title="No endpoints" message="No endpoints discovered" icon={Route} description="API routes will appear once services register their endpoints" />
+	<EmptyState title="No endpoints" message="No endpoints discovered" icon={Route} />
 {:else}
 	<div class="space-y-3">
 		{#each $endpoints.services as group}
-			<Card class="p-0 overflow-hidden">
-				<button
-					class="w-full flex items-center gap-3 p-4 hover:bg-muted/50 transition-colors text-left focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-inset"
-					onclick={() => expandedService = expandedService === group.service ? null : group.service}
-					aria-expanded={expandedService === group.service}
-				>
+			<Card>
+				<CardContent class="p-4">
+					<button class="flex items-center justify-between w-full text-left" onclick={() => toggleExpand(group.service)} aria-expanded={expandedService === group.service}>
+						<div class="flex items-center gap-2">
+							<Route class="h-4 w-4 text-primary" />
+							<span class="text-sm font-semibold">{group.service}</span>
+							<Badge variant="outline" class="ml-2">{group.endpoints.length}</Badge>
+						</div>
+						{#if expandedService === group.service}
+							<ChevronDown class="h-4 w-4" />
+						{:else}
+							<ChevronRight class="h-4 w-4" />
+						{/if}
+					</button>
 					{#if expandedService === group.service}
-						<ChevronDown class="h-4 w-4 text-muted-foreground shrink-0" aria-hidden="true" />
-					{:else}
-						<ChevronRight class="h-4 w-4 text-muted-foreground shrink-0" aria-hidden="true" />
+						<div class="mt-4 space-y-2">
+							{#each group.endpoints as endpoint}
+								<div class="flex items-center gap-3 py-2 px-3 rounded-lg bg-secondary/50">
+									<Badge variant="outline" class="font-mono text-[10px] shrink-0">{endpoint.method}</Badge>
+									<span class="text-xs font-mono truncate">{endpoint.path}</span>
+								</div>
+							{/each}
+						</div>
 					{/if}
-					<Route class="h-4 w-4 text-primary shrink-0" aria-hidden="true" />
-					<span class="text-sm font-semibold truncate">{group.service}</span>
-					<span class="text-xs text-muted-foreground ml-auto shrink-0">{group.endpoints.length} endpoints</span>
-				</button>
-
-				{#if expandedService === group.service}
-					<Separator />
-					<div class="divide-y divide-border">
-						{#each group.endpoints as endpoint}
-							<div class="flex items-center gap-3 px-6 py-4">
-								<Badge variant="outline" class="font-mono text-xs font-bold shrink-0 {methodColor(endpoint.method)}">
-									{endpoint.method}
-								</Badge>
-								<span class="text-sm font-mono flex-1 truncate">{endpoint.path}</span>
-								{#if endpoint.description}
-									<span class="text-xs text-muted-foreground hidden sm:block truncate max-w-[200px]">{endpoint.description}</span>
-								{/if}
-							</div>
-						{/each}
-					</div>
-				{/if}
+				</CardContent>
 			</Card>
 		{/each}
 	</div>

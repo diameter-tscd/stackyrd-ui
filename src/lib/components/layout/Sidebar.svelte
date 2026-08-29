@@ -11,7 +11,8 @@
 		Cog,
 		ChevronLeft,
 		ChevronRight,
-		Asterisk
+		Asterisk,
+		Activity
 	} from 'lucide-svelte';
 	import { sidebarCollapsed } from '$lib/stores/auth';
 	import { page } from '$app/stores';
@@ -32,6 +33,7 @@
 		{ label: 'Services', href: '/services', icon: Server, match: /^\/services/ },
 		{ label: 'Infrastructure', href: '/infrastructure', icon: HardDrive, match: /^\/infrastructure/ },
 		{ label: 'Metrics', href: '/metrics', icon: BarChart3, match: /^\/metrics/ },
+		{ label: 'Runtimes', href: '/runtimes', icon: Activity, match: /^\/runtimes/ },
 		{ label: 'Logs', href: '/logs', icon: ScrollText, match: /^\/logs/ },
 		{ label: 'Endpoints', href: '/endpoints', icon: Route, match: /^\/endpoints/ },
 		{ label: 'Swagger', href: '/swagger', icon: BookOpen, match: /^\/swagger/ },
