@@ -1,6 +1,8 @@
+import { get } from 'svelte/store';
 import { env } from '$env/dynamic/public';
 import { browser } from '$app/environment';
 import { mcpInstanceId } from '$lib/stores/data';
+import { auth } from '$lib/stores/auth';
 import type { ApiResponse, MCPToolResult } from '$lib/types/api';
 
 interface JSONRPCRequest {
@@ -20,16 +22,11 @@ interface JSONRPCResponse {
 export function resolveMcpUrl(endpoint?: string): string {
 	if (endpoint) return endpoint;
 	if (browser) {
-		try {
-			const stored = localStorage.getItem('stackyrd_auth');
-			if (stored) {
-				const parsed = JSON.parse(stored) as { mcpUrl?: string };
-				if (parsed.mcpUrl) {
-					if (parsed.mcpUrl.includes('localhost:8080') || parsed.mcpUrl.includes('127.0.0.1:8080')) return '/mcp';
-					return parsed.mcpUrl;
-				}
-			}
-		} catch {}
+		const state = get(auth);
+		if (state.mcpUrl) {
+			if (state.mcpUrl.includes('localhost:8080') || state.mcpUrl.includes('127.0.0.1:8080')) return '/mcp';
+			return state.mcpUrl;
+		}
 		return '/mcp';
 	}
 	return env.PUBLIC_MCP_URL || 'http://localhost:8080/mcp';

@@ -177,6 +177,19 @@ export async function getConfig(token: string | null): Promise<ApiResponse<Confi
 	return apiFetch<ApiResponse<ConfigData>>('/api/v1/config', effToken(token));
 }
 
+export async function getConfigYaml(token: string | null): Promise<string> {
+	const t = effToken(token);
+	const response = await fetch('/api/v1/config/raw', {
+		headers: t ? { Authorization: `Bearer ${t}` } : {}
+	});
+	const text = await response.text();
+	if (!response.ok) {
+		const { ApiError } = await import('$lib/api/rest');
+		throw new ApiError(text || response.statusText, response.status, text);
+	}
+	return text;
+}
+
 export async function saveTheme(
 	token: string | null,
 	name: string

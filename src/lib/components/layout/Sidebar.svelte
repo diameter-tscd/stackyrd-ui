@@ -20,6 +20,7 @@
 	import Separator from "$lib/components/ui/separator.svelte";
 	import Button from "$lib/components/ui/Button.svelte";
 	import { animate } from 'motion';
+	import ConnectionSwitcher from './ConnectionSwitcher.svelte';
 
 	interface NavItem {
 		label: string;
@@ -95,6 +96,14 @@
 	</nav>
 
 	<div class="p-3 border-t-2 border-black bg-sidebar">
+		<ConnectionSwitcher />
+		<div class="flex items-center justify-center text-[11px] text-muted-foreground/60 font-medium tracking-wide py-1">
+			{#if !$sidebarCollapsed}
+				<span>v{__APP_VERSION__}</span>
+			{:else}
+				<span class="text-[10px]">v{__APP_VERSION__}</span>
+			{/if}
+		</div>
 		<Button
 			variant="outline"
 			size="icon"
