@@ -49,7 +49,7 @@
 
 	function press(node: HTMLAnchorElement) {
 		const onDown = () => {
-			if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+			if (window.matchMedia('(prefers-reduced-motion: reduce)').matches || document.documentElement.hasAttribute('data-disable-anim')) return;
 			animate(node, { scale: [1, 0.96, 1] }, { duration: 0.28, easing: 'ease-out' } as any);
 		};
 		node.addEventListener('pointerdown', onDown);

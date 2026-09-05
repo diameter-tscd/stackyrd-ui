@@ -1,5 +1,3 @@
-@import url('https://fonts.cdnfonts.com/css/product-sans');
-@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap');
 @import "tailwindcss";
 @import "tw-animate-css";
 
@@ -206,5 +204,10 @@
 		background: var(--foreground);
 		border-radius: 999px;
 		border: 2px solid var(--muted);
+	}
+	[data-disable-anim] *, [data-disable-anim] *::before, [data-disable-anim] *::after {
+		animation: none !important;
+		transition: none !important;
+		scroll-behavior: auto !important;
 	}
 }

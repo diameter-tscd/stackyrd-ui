@@ -3,6 +3,7 @@ import { vaultExists, setup, unlock, lock, list, insert, update, remove, setLast
 import { auth } from '$lib/stores/auth';
 import { mcpCall } from '$lib/api/mcp';
 import { browser } from '$app/environment';
+import { getVaultSessionPassword, setVaultSessionPassword, clearVaultSession } from '$lib/stores/settings';
 
 export interface ConnectionsState {
 	connections: Connection[];
@@ -24,8 +25,29 @@ export const connections = writable<ConnectionsState>({
 
 function init() {
 	if (!browser) return;
-	void vaultExists().then((exists) => {
-		connections.update((s) => ({ ...s, view: exists ? 'unlock' : 'setup' }));
+	void vaultExists().then(async (exists) => {
+		if (!exists) {
+			connections.update((s) => ({ ...s, view: 'setup' }));
+			return;
+		}
+		const remembered = getVaultSessionPassword();
+		if (remembered) {
+			try {
+				const newConnections = await unlock(remembered);
+				const active = newConnections.length > 0 ? newConnections[0] : null;
+				connections.set({
+					connections: newConnections,
+					activeId: active?.id ?? null,
+					unlocked: true,
+					view: 'manager',
+					loading: false,
+					error: ''
+				});
+				if (active) auth.setSession(active);
+				return;
+			} catch {}
+		}
+		connections.update((s) => ({ ...s, view: 'unlock' }));
 	});
 }
 
@@ -69,6 +91,7 @@ export async function setupVault(password: string, conn: { name: string; apiUrl:
 			error: ''
 		});
 		auth.setSession(newConnections[0]);
+		try { setVaultSessionPassword(password); } catch {}
 		return true;
 	} catch (e) {
 		connections.update((s) => ({ ...s, loading: false, error: (e as Error)?.message || 'Failed to create vault' }));
@@ -88,6 +111,7 @@ export async function unlockVault(password: string): Promise<boolean> {
 			loading: false,
 			error: ''
 		});
+		try { setVaultSessionPassword(password); } catch {}
 		return true;
 	} catch {
 		connections.update((s) => ({ ...s, loading: false, error: 'Invalid master password' }));
@@ -97,6 +121,7 @@ export async function unlockVault(password: string): Promise<boolean> {
 
 export function lockVault(): void {
 	lock();
+	clearVaultSession();
 	connections.set({
 		connections: [],
 		activeId: null,

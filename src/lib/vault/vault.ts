@@ -1,5 +1,4 @@
-import initSqlJs, { type Database } from 'sql.js';
-import wasmUrl from 'sql.js/dist/sql-wasm.wasm?url';
+import type { Database } from 'sql.js';
 import { encrypt, decrypt } from './crypto';
 import { idbGet, idbSet } from './idb';
 
@@ -15,13 +14,17 @@ export interface Connection {
 	lastUsed: string | null;
 }
 
-let SQL: Awaited<ReturnType<typeof initSqlJs>> | null = null;
+let SQL: any = null;
 let db: Database | null = null;
 let password: string | null = null;
 
 async function getSql() {
 	if (!SQL) {
-		SQL = await initSqlJs({ locateFile: () => wasmUrl });
+		const [{ default: initSqlJs }, { default: wasmUrl }] = await Promise.all([
+			import('sql.js'),
+			import('sql.js/dist/sql-wasm.wasm?url')
+		] as const);
+		SQL = await (initSqlJs as any)({ locateFile: () => wasmUrl });
 	}
 	return SQL;
 }
@@ -36,8 +39,9 @@ function normalizeUrl(url: string): string {
 
 export async function setup(passwordStr: string, conn: Omit<Connection, 'id' | 'createdAt' | 'lastUsed'>): Promise<Connection[]> {
 	const SQL = await getSql();
-	db = new SQL.Database();
-	db.run(`CREATE TABLE connections (
+	const _db = new SQL.Database();
+	db = _db;
+	_db.run(`CREATE TABLE connections (
 		id TEXT PRIMARY KEY,
 		name TEXT NOT NULL UNIQUE,
 		api_url TEXT NOT NULL,
@@ -51,7 +55,7 @@ export async function setup(passwordStr: string, conn: Omit<Connection, 'id' | '
 	const createdAt = new Date().toISOString();
 	const mcpUrl = normalizeUrl(conn.mcpUrl);
 
-	db.run('INSERT INTO connections VALUES (?, ?, ?, ?, ?, ?, ?)', [
+	_db.run('INSERT INTO connections VALUES (?, ?, ?, ?, ?, ?, ?)', [
 		id,
 		conn.name,
 		conn.apiUrl.trim(),

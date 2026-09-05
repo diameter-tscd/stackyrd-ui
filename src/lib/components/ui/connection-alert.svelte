@@ -18,8 +18,7 @@
 	});
 
 	function motionBanner(node: HTMLElement) {
-		const prefersReduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-		if (prefersReduced) return;
+		if (window.matchMedia("(prefers-reduced-motion: reduce)").matches || document.documentElement.hasAttribute('data-disable-anim')) return;
  // -ignore
 		(animate as any)(node as any, { y: [-16, 0], opacity: [0, 1], scale: [0.97, 1] }, { duration: 0.4, easing: [0.34, 1.56, 0.64, 1] as unknown as string });
 	}
@@ -30,8 +29,7 @@
 			dismissed = true;
 			return;
 		}
-		const prefersReduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-		if (prefersReduced) {
+		if (window.matchMedia("(prefers-reduced-motion: reduce)").matches || document.documentElement.hasAttribute('data-disable-anim')) {
 			dismissed = true;
 			return;
 		}

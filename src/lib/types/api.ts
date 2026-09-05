@@ -247,4 +247,11 @@ export interface GoroutineDataPoint {
 	states: Record<string, number>;
 }
 
+export interface ConfigMCPData {
+	source: string;
+	raw: string;
+	parsed?: unknown;
+	error?: string;
+}
+
 export type ThemePreset = 'dark' | 'midnight' | 'terminal' | 'slate' | 'ember';

@@ -27,15 +27,13 @@
 	};
 
 	function motionIn(node: HTMLElement) {
-		const prefersReduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-		if (prefersReduced) return;
+		if (window.matchMedia("(prefers-reduced-motion: reduce)").matches || document.documentElement.hasAttribute('data-disable-anim')) return;
  // -ignore
 		(animate as any)(node as any, { x: [80, 0], opacity: [0, 1], scale: [0.96, 1] }, { duration: 0.4, easing: [0.34, 1.56, 0.64, 1] as unknown as string });
 	}
 
 	function dismissWithMotion(id: string, node: HTMLElement) {
-		const prefersReduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-		if (prefersReduced) {
+		if (window.matchMedia("(prefers-reduced-motion: reduce)").matches || document.documentElement.hasAttribute('data-disable-anim')) {
 			toasts.dismiss(id);
 			return;
 		}
@@ -54,11 +52,13 @@
 				style="font-family: var(--font-sans);"
 				{@attach motionIn}
 				onmouseenter={(e) => {
+					if (window.matchMedia("(prefers-reduced-motion: reduce)").matches || document.documentElement.hasAttribute('data-disable-anim')) return;
 					const t = e.currentTarget as HTMLElement;
  // -ignore
 					(animate as any)(t as any, { scale: 1.02 }, { duration: 0.15 });
 				}}
 				onmouseleave={(e) => {
+					if (window.matchMedia("(prefers-reduced-motion: reduce)").matches || document.documentElement.hasAttribute('data-disable-anim')) return;
 					const t = e.currentTarget as HTMLElement;
  // -ignore
 					(animate as any)(t as any, { scale: 1 }, { duration: 0.15 });

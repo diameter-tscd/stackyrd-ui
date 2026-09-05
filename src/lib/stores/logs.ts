@@ -11,7 +11,7 @@ export interface LogState {
 }
 
 const MAX_LOGS = 2000;
-const REALTIME = 0;
+export const REALTIME = 100;
 
 function createLogStore() {
 	const { subscribe, update } = writable<LogState>({
@@ -47,7 +47,6 @@ function createLogStore() {
 			});
 		};
 		const ms = getInterval();
-		if (ms === REALTIME) return;
 		flushTimer = window.setInterval(tick, ms);
 	}
 
@@ -74,13 +73,7 @@ function createLogStore() {
 					source: (raw.source as string) ?? (raw.StreamID as string) ?? (raw.stream_id as string) ?? (raw.Data as Record<string, unknown>)?.source as string ?? undefined
 				};
 				if (!entry.message) return;
-				update((s) => {
-					if (s.realtime || s.streamInterval <= 500) {
-						const next = [...s.logs.slice(-MAX_LOGS + 1), entry].slice(-MAX_LOGS);
-						return { ...s, logs: next };
-					}
-					return { ...s, buffer: [...s.buffer, entry] };
-				});
+				update((s) => ({ ...s, buffer: [...s.buffer, entry] }));
 			} catch {}
 		};
 		eventSource.onerror = () => {

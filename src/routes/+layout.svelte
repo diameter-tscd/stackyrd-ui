@@ -9,6 +9,7 @@
 	import Toast from '$lib/components/ui/Toast.svelte';
 	import ConnectionAlert from '$lib/components/ui/connection-alert.svelte';
 	import { sidebarCollapsed } from '$lib/stores/auth';
+	import { disableAnimation } from '$lib/stores/settings';
 	import { logStore } from '$lib/stores/logs';
 	import { connectionStatus } from '$lib/stores/data';
 	import { mcpPoller } from '$lib/stores/mcpPoller';
@@ -17,10 +18,14 @@
 
 	let { children } = $props();
 
-	let reduceMotion = $state(false);
+	let systemReduce = $state(false);
+	let reduceMotion = $derived($disableAnimation || systemReduce);
 
 	onMount(() => {
-		reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+		const m = window.matchMedia('(prefers-reduced-motion: reduce)');
+		systemReduce = m.matches;
+		const handler = () => (systemReduce = m.matches);
+		m.addEventListener('change', handler);
 		if ($auth.authenticated) {
 			logStore.start();
 			mcpPoller.start();
@@ -29,6 +34,7 @@
 			logStore.stop();
 			connectionStatus.set('checking');
 		}
+		return () => m.removeEventListener('change', handler);
 	});
 
 	onDestroy(() => {

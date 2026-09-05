@@ -9,10 +9,10 @@
 	import Button from '$lib/components/ui/Button.svelte';
 	import Spinner from '$lib/components/ui/Spinner.svelte';
 	import EmptyState from '$lib/components/ui/EmptyState.svelte';
-	import Separator from '$lib/components/ui/separator.svelte';
 	import { BarChart3, RefreshCw, Code, Activity, WifiOff, Settings } from 'lucide-svelte';
 	import { goto } from '$app/navigation';
 	import { ApiError } from '$lib/api/rest';
+	import { onMount } from 'svelte';
 
 	let loading = $state(true);
 	let rawMetrics = $state('');
@@ -63,32 +63,51 @@
 		}
 	}
 
-	function parseMetrics(text: string): { name: string; help: string; value: number }[] {
+	function parseMetrics(text: string): { name: string; raw: string; help: string; value: number }[] {
+		if (!text) return [];
 		const lines = text.split('\n');
-		const metrics: { name: string; help: string; value: number }[] = [];
+		const metrics: { name: string; raw: string; help: string; value: number }[] = [];
 		const helps: Record<string, string> = {};
-		for (const line of lines) {
+		for (let i = 0; i < lines.length; i++) {
+			const line = lines[i];
+			if (!line) continue;
 			if (line.startsWith('# HELP ')) {
-				const [, name, ...rest] = line.split(' ');
-				helps[name] = rest.join(' ');
-			} else if (line.startsWith('# TYPE ')) {
-				continue;
-			} else if (line && !line.startsWith('#')) {
-				const parts = line.split(' ');
-				const name = parts[0];
-				const value = parseFloat(parts[parts.length - 1]);
-				if (!isNaN(value)) metrics.push({ name, help: helps[name] || '', value });
+				const sp = line.indexOf(' ', 7);
+				if (sp !== -1) {
+					const name = line.slice(7, sp);
+					helps[name] = line.slice(sp + 1);
+				}
+			} else if (line.startsWith('#')) continue;
+			else {
+				const lastSp = line.lastIndexOf(' ');
+				if (lastSp === -1) continue;
+				const raw = line.slice(0, lastSp);
+				const name = raw.split('{')[0];
+				const value = parseFloat(line.slice(lastSp + 1));
+				if (!Number.isNaN(value)) metrics.push({ name, raw, help: helps[name] ?? '', value });
 			}
 		}
 		return metrics;
 	}
 
-	const parsedMetrics = $derived(parseMetrics(rawMetrics));
-	const groupedMetrics = $derived({
-		requests: parsedMetrics.filter((m) => m.name.includes('request')),
-		errors: parsedMetrics.filter((m) => m.name.includes('error')),
-		cache: parsedMetrics.filter((m) => m.name.includes('cache')),
-		other: parsedMetrics.filter((m) => !m.name.includes('request') && !m.name.includes('error') && !m.name.includes('cache'))
+	const parsedMetrics = $derived.by(() => parseMetrics(rawMetrics));
+	const groupedMetrics = $derived.by(() => {
+		const p = parsedMetrics;
+		const requests: typeof p = [];
+		const errors: typeof p = [];
+		const cache: typeof p = [];
+		const other: typeof p = [];
+		for (const m of p) {
+			if (m.name.includes('request')) requests.push(m);
+			else if (m.name.includes('error')) errors.push(m);
+			else if (m.name.includes('cache')) cache.push(m);
+			else other.push(m);
+		}
+		return { requests, errors, cache, other };
+	});
+
+	onMount(() => {
+		if ($auth.authenticated) fetchMetrics();
 	});
 </script>
 
@@ -150,9 +169,9 @@
 					</CardTitle>
 				</CardHeader>
 				<CardContent class="space-y-0 divide-y divide-border">
-					{#each groupedMetrics.requests as metric}
+					{#each groupedMetrics.requests as metric, i (metric.raw + '|' + i)}
 						<div class="flex items-center justify-between py-4 gap-5">
-							<span class="font-mono text-xs truncate text-foreground">{metric.name}</span>
+							<span class="font-mono text-xs truncate text-foreground" title={metric.raw}>{metric.raw}</span>
 							<span class="text-sm font-medium tabular-nums shrink-0">{metric.value.toLocaleString()}</span>
 						</div>
 					{/each}
@@ -165,9 +184,9 @@
 					<CardTitle class="text-sm">Errors</CardTitle>
 				</CardHeader>
 				<CardContent class="space-y-0 divide-y divide-border">
-					{#each groupedMetrics.errors as metric}
+					{#each groupedMetrics.errors as metric, i (metric.raw + '|' + i)}
 						<div class="flex items-center justify-between py-4 gap-5">
-							<span class="font-mono text-xs truncate">{metric.name}</span>
+							<span class="font-mono text-xs truncate" title={metric.raw}>{metric.raw}</span>
 							<span class="text-sm font-medium tabular-nums text-destructive shrink-0">{metric.value.toLocaleString()}</span>
 						</div>
 					{/each}
@@ -180,9 +199,9 @@
 					<CardTitle class="text-sm">Cache</CardTitle>
 				</CardHeader>
 				<CardContent class="space-y-0 divide-y divide-border">
-					{#each groupedMetrics.cache as metric}
+					{#each groupedMetrics.cache as metric, i (metric.raw + '|' + i)}
 						<div class="flex items-center justify-between py-4 gap-5">
-							<span class="font-mono text-xs truncate">{metric.name}</span>
+							<span class="font-mono text-xs truncate" title={metric.raw}>{metric.raw}</span>
 							<span class="text-sm font-medium tabular-nums text-emerald-400 shrink-0">{metric.value.toLocaleString()}</span>
 						</div>
 					{/each}
@@ -195,9 +214,9 @@
 					<CardTitle class="text-sm">Other</CardTitle>
 				</CardHeader>
 				<CardContent class="space-y-0 divide-y divide-border">
-					{#each groupedMetrics.other as metric}
+					{#each groupedMetrics.other as metric, i (metric.raw + '|' + i)}
 						<div class="flex items-center justify-between py-4 gap-5">
-							<span class="font-mono text-xs truncate">{metric.name}</span>
+							<span class="font-mono text-xs truncate" title={metric.raw}>{metric.raw}</span>
 							<span class="text-sm text-muted-foreground tabular-nums shrink-0">{metric.value.toLocaleString()}</span>
 						</div>
 					{/each}
