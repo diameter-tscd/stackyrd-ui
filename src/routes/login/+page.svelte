@@ -223,6 +223,11 @@
 	}
 </script>
 
+<svelte:head>
+	<title>Login - Stackyrd</title>
+	<meta name="description" content="Login - Stackyrd" />
+</svelte:head>
+
 <div class="min-h-screen flex items-center justify-center p-4 bg-background">
 	<div class="w-full max-w-md space-y-6">
 		<div class="text-center space-y-3">

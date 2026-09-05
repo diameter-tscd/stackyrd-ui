@@ -111,6 +111,11 @@
 	});
 </script>
 
+<svelte:head>
+	<title>Metrics - Stackyrd</title>
+	<meta name="description" content="Metrics - Stackyrd" />
+</svelte:head>
+
 <PageHeader title="Metrics" subtitle="Prometheus metrics from /metrics endpoint">
 	<div class="flex gap-2">
 		<Button variant="outline" size="sm" onclick={() => showRaw = !showRaw} aria-pressed={showRaw} disabled={unavailable}>

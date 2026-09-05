@@ -197,6 +197,11 @@
 	}
 </script>
 
+<svelte:head>
+	<title>Overview - Stackyrd</title>
+	<meta name="description" content="Overview - Stackyrd" />
+</svelte:head>
+
 <PageHeader title="Overview" subtitle="System status and health at a glance" />
 
 {#if $health === null && $mcpUptime === null}

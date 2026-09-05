@@ -13,6 +13,11 @@
 	import ThemeToggle from '$lib/components/ui/theme-toggle.svelte';
 </script>
 
+<svelte:head>
+	<title>Settings - Stackyrd</title>
+	<meta name="description" content="Settings - Stackyrd" />
+</svelte:head>
+
 <PageHeader title="Settings" subtitle="Dashboard appearance and preferences" />
 
 <div class="space-y-4 max-w-2xl">

@@ -89,6 +89,11 @@
 	const filters: Array<[string, string]> = [['all', 'All'], ['debug', 'Debug'], ['info', 'Info'], ['warn', 'Warn'], ['error', 'Error']];
 </script>
 
+<svelte:head>
+	<title>Logs - Stackyrd</title>
+	<meta name="description" content="Logs - Stackyrd" />
+</svelte:head>
+
 <PageHeader title="Logs" subtitle="Live log stream — {$logStore.realtime ? 'realtime (100ms)' : `buffered every ${$logStore.streamInterval}ms`}">
 	<div class="flex flex-wrap items-center gap-2">
 		<div class="flex items-center gap-2 rounded-full border-2 border-black bg-white px-2 py-1 shadow-sm dark:bg-black dark:border-zinc-700">

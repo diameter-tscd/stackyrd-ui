@@ -64,7 +64,7 @@
 	)}
 	aria-label="Main navigation"
 >
-	<div class="flex items-center gap-3 h-16 px-4 border-b-2 border-black shrink-0 bg-sidebar">
+	<div class={cn("flex items-center h-16 border-b-2 border-black shrink-0 bg-sidebar", $sidebarCollapsed ? 'justify-center px-2' : 'gap-3 px-4')}>
 		<span class="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground shrink-0">
 			<Asterisk class="h-5 w-5 animate-spin" style="animation-duration: 8s;" aria-hidden="true" />
 		</span>
@@ -80,10 +80,12 @@
 				{@attach press}
 				aria-current={isActive(item) ? 'page' : undefined}
 				class={cn(
-					"flex items-center gap-3 px-3 py-2.5 rounded-full text-sm font-medium border-2 transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 active:scale-[0.97] will-change-transform",
+					"flex items-center rounded-full text-sm font-medium border-2 transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 active:scale-[0.97] will-change-transform",
+					$sidebarCollapsed ? 'justify-center h-10 w-10 mx-auto p-0 shrink-0' : 'gap-3 px-3 py-2.5',
 					isActive(item)
 						? 'bg-p5-yellow text-black border-black shadow-sm'
-						: 'bg-transparent text-sidebar-foreground border-transparent hover:bg-accent hover:text-accent-foreground hover:border-black hover:translate-x-[1px]'
+						: 'bg-transparent text-sidebar-foreground border-transparent hover:bg-accent hover:text-accent-foreground hover:border-black',
+					!$sidebarCollapsed && !isActive(item) ? 'hover:translate-x-[1px]' : ''
 				)}
 				title={$sidebarCollapsed ? item.label : undefined}
 			>
@@ -107,7 +109,7 @@
 		<Button
 			variant="outline"
 			size="icon"
-			class="w-full rounded-full border-black bg-background hover:bg-black hover:text-white active:scale-[0.96] transition-transform"
+			class={cn("rounded-full border-black bg-background hover:bg-black hover:text-white active:scale-[0.96] transition-transform", $sidebarCollapsed ? 'h-10 w-10 mx-auto p-0 flex items-center justify-center shrink-0' : 'w-full')}
 			onclick={() => sidebarCollapsed.update((v) => !v)}
 			aria-label={$sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
 		>

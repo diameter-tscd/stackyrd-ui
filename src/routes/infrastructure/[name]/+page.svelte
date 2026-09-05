@@ -49,6 +49,11 @@
 	}
 </script>
 
+<svelte:head>
+	<title>{name ? `${name} - Stackyrd` : 'Infrastructure - Stackyrd'}</title>
+	<meta name="description" content="{name ? `${name} - Stackyrd` : 'Infrastructure - Stackyrd'}" />
+</svelte:head>
+
 <PageHeader title={name || 'Component'} subtitle="Infrastructure component details">
 	<Button variant="outline" size="sm" onclick={() => goto('/infrastructure')} aria-label="Back to infrastructure">
 		<ArrowLeft class="h-4 w-4" />

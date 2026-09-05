@@ -109,6 +109,11 @@
 	}
 </script>
 
+<svelte:head>
+	<title>Runtimes - Stackyrd</title>
+	<meta name="description" content="Runtimes - Stackyrd" />
+</svelte:head>
+
 <PageHeader title="Runtimes" subtitle="Goroutine histogram & leak detection — 20min FIFO">
 	<Button variant="outline" size="sm" onclick={refreshGoroutines} aria-label="Refresh goroutines">
 		<RefreshCw class="h-4 w-4" />

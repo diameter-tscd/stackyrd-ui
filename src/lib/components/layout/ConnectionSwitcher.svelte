@@ -26,15 +26,15 @@
 	}
 </script>
 
-<div class="px-3 pb-3">
+<div class={cn("pb-3", $sidebarCollapsed ? 'px-2 flex justify-center' : 'px-3')}>
 	{#if $sidebarCollapsed}
 		<button
 			type="button"
-			class="w-full flex items-center justify-center gap-2 px-2 py-2 rounded-full text-xs font-medium border-2 border-black bg-card hover:bg-accent transition-colors"
+			class="h-10 w-10 flex items-center justify-center rounded-full text-xs font-medium border-2 border-black bg-card hover:bg-accent transition-colors shrink-0 mx-auto p-0"
 			onclick={() => open = !open}
 			aria-label="Connection switcher"
 		>
-			<Server class="h-4 w-4 shrink-0" />
+			<Server class="h-[18px] w-[18px] shrink-0" />
 		</button>
 	{:else}
 		<button

@@ -41,6 +41,11 @@
 	}
 </script>
 
+<svelte:head>
+	<title>Infrastructure - Stackyrd</title>
+	<meta name="description" content="Infrastructure - Stackyrd" />
+</svelte:head>
+
 <PageHeader title="Infrastructure" subtitle="{$infra.length} components monitored">
 	<Button variant="outline" size="sm" onclick={refreshInfra} aria-label="Refresh infrastructure">
 		<RefreshCw class="h-4 w-4" />
