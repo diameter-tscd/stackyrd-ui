@@ -35,15 +35,16 @@
 	} = $props();
 
 	function motionIn(node: HTMLElement) {
-		const prefersReduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-		if (prefersReduced) return;
+		if (window.matchMedia("(prefers-reduced-motion: reduce)").matches || document.documentElement.hasAttribute('data-disable-anim')) return;
  // -ignore
 		(animate as any)(node as any, { y: [-12, 0], opacity: [0, 1], scale: [0.98, 1] }, { duration: 0.35, easing: [0.34, 1.56, 0.64, 1] as unknown as string });
 		node.addEventListener("mouseenter", () => {
+			if (document.documentElement.hasAttribute('data-disable-anim')) return;
  // -ignore
 			(animate as any)(node as any, { scale: 1.01 }, { duration: 0.15, easing: "ease-out" });
 		});
 		node.addEventListener("mouseleave", () => {
+			if (document.documentElement.hasAttribute('data-disable-anim')) return;
  // -ignore
 			(animate as any)(node as any, { scale: 1 }, { duration: 0.2, easing: "ease-out" });
 		});

@@ -5,28 +5,34 @@
 	import Button from '$lib/components/ui/Button.svelte';
 	import Input from '$lib/components/ui/input.svelte';
 	import { ScrollText, Pause, Play, Trash2, Download, Timer, ChevronDown } from 'lucide-svelte';
-	import { animate } from "motion";
 	import { logStore } from '$lib/stores/logs';
 
 	let filter = $state<string>('all');
 	let search = $state('');
+	let debouncedSearch = $state('');
 	let autoScroll = $state(true);
 	let logContainer: HTMLDivElement | null = null;
+	let visibleCount = $state(200);
+	let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+	let reducedMotion = $state(false);
 
 	const intervalOptions: Array<{ value: number; label: string }> = [
-		{ value: 0, label: 'Realtime' },
+		{ value: 100, label: 'Realtime' },
 		{ value: 500, label: '500ms' },
 		{ value: 1000, label: '1000ms' },
 		{ value: 2000, label: '2000ms' },
 		{ value: 5000, label: '5000ms' }
 	];
 
-	const currentIntervalLabel = $derived(
-		intervalOptions.find((o) => o.value === $logStore.streamInterval)?.label ?? '1000ms'
-	);
-
 	onMount(() => {
 		logStore.start();
+		reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches || document.documentElement.hasAttribute('data-disable-anim');
+	});
+
+	$effect(() => {
+		void search;
+		if (debounceTimer) clearTimeout(debounceTimer);
+		debounceTimer = setTimeout(() => { debouncedSearch = search; visibleCount = 200; }, 200);
 	});
 
 	$effect(() => {
@@ -37,13 +43,39 @@
 		}
 	});
 
-	const filteredLogs = $derived(
-		$logStore.logs.filter((log) => {
-			if (filter !== 'all' && log.level !== filter) return false;
-			if (search && !log.message.toLowerCase().includes(search.toLowerCase())) return false;
-			return true;
-		})
-	);
+	$effect(() => {
+		void filter; void debouncedSearch;
+		visibleCount = 200;
+	});
+
+	const filteredLogs = $derived.by(() => {
+		const logs = $logStore.logs;
+		const q = debouncedSearch.toLowerCase();
+		const f = filter;
+		if (f === 'all' && !q) return logs;
+		const out: typeof logs = [];
+		for (let i = 0; i < logs.length; i++) {
+			const log = logs[i];
+			if (f !== 'all' && log.level !== f) continue;
+			if (q && !log.message.toLowerCase().includes(q)) continue;
+			out.push(log);
+		}
+		return out;
+	});
+
+	const displayLogs = $derived(filteredLogs.slice(-visibleCount));
+
+	function loadMore() {
+		visibleCount = Math.min(visibleCount + 200, filteredLogs.length);
+	}
+
+	function handleScroll(e: Event) {
+		const target = e.target as HTMLDivElement;
+		autoScroll = target.scrollHeight - target.scrollTop - target.clientHeight < 50;
+		if (target.scrollTop < 200 && visibleCount < filteredLogs.length) {
+			loadMore();
+		}
+	}
 
 	function levelColor(level: string) {
 		switch (level) {
@@ -55,15 +87,14 @@
 	}
 
 	const filters: Array<[string, string]> = [['all', 'All'], ['debug', 'Debug'], ['info', 'Info'], ['warn', 'Warn'], ['error', 'Error']];
-
-	function animateRow(node: HTMLDivElement) {
-		const prefersReduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-		if (prefersReduced) return;
-		(animate as any)(node as any, { opacity: [0, 1], x: [-8, 0] }, { duration: 0.25, easing: "ease-out" });
-	}
 </script>
 
-<PageHeader title="Logs" subtitle="Live log stream — {$logStore.realtime ? 'realtime' : `buffered every ${$logStore.streamInterval}ms`}">
+<svelte:head>
+	<title>Logs - Stackyrd</title>
+	<meta name="description" content="Logs - Stackyrd" />
+</svelte:head>
+
+<PageHeader title="Logs" subtitle="Live log stream — {$logStore.realtime ? 'realtime (100ms)' : `buffered every ${$logStore.streamInterval}ms`}">
 	<div class="flex flex-wrap items-center gap-2">
 		<div class="flex items-center gap-2 rounded-full border-2 border-black bg-white px-2 py-1 shadow-sm dark:bg-black dark:border-zinc-700">
 			<Timer class="h-4 w-4 text-muted-foreground" aria-hidden="true" />
@@ -99,7 +130,7 @@
 </PageHeader>
 
 <div class="flex flex-col sm:flex-row gap-3 mb-4">
-	<Input type="text" placeholder="Search logs..." bind:value={search} class="flex-1" aria-label="Search logs" />
+	<Input type="text" placeholder="Search logs... (debounced 200ms)" bind:value={search} class="flex-1" aria-label="Search logs" />
 	<div class="flex flex-wrap gap-1" role="group" aria-label="Filter by level">
 		{#each filters as [value, label]}
 			<Button
@@ -118,10 +149,7 @@
 	<div
 		class="h-[60vh] overflow-y-auto font-mono text-xs bg-black text-white"
 		bind:this={logContainer}
-		onscroll={(e) => {
-			const target = e.target as HTMLDivElement;
-			autoScroll = target.scrollHeight - target.scrollTop - target.clientHeight < 50;
-		}}
+		onscroll={handleScroll}
 	>
 		{#if filteredLogs.length === 0}
 			<div class="flex flex-col items-center justify-center h-full text-zinc-400 py-12 gap-3">
@@ -129,13 +157,19 @@
 					<ScrollText class="h-6 w-6 text-zinc-500" aria-hidden="true" />
 				</span>
 				<p class="text-sm font-mono font-semibold">No log entries to display</p>
-				<p class="text-xs font-mono text-zinc-500">{$logStore.realtime ? 'Realtime — no buffering' : `Buffer flush every ${$logStore.streamInterval}ms`} — {$logStore.buffer.length} buffered • {$logStore.connectionStatus}</p>
+				<p class="text-xs font-mono text-zinc-500">{$logStore.realtime ? 'Realtime (100ms) — flush every 100ms' : `Buffer flush every ${$logStore.streamInterval}ms`} — {$logStore.buffer.length} buffered • {$logStore.connectionStatus}</p>
 			</div>
 		{:else}
-			{#each filteredLogs as entry, i (i)}
+			{#if filteredLogs.length > visibleCount}
+				<div class="sticky top-0 z-10 bg-zinc-900 border-b border-zinc-800 px-6 py-2 text-center">
+					<button class="text-[11px] font-semibold text-zinc-400 hover:text-white" onclick={loadMore}>
+						Load {Math.min(200, filteredLogs.length - visibleCount)} more (showing {displayLogs.length}/{filteredLogs.length})
+					</button>
+				</div>
+			{/if}
+			{#each displayLogs as entry, i (i + '|' + entry.timestamp + '|' + entry.message)}
 				<div
-					class="flex items-start gap-3 px-6 py-3 hover:bg-zinc-900 border-b border-zinc-800 last:border-0 transition-colors"
-					{@attach (node) => animateRow(node as HTMLDivElement)}
+					class="flex items-start gap-3 px-6 py-3 hover:bg-zinc-900 border-b border-zinc-800 last:border-0"
 				>
 					<span class="text-zinc-500 shrink-0 w-20 tabular-nums font-mono">{entry.timestamp ? new Date(entry.timestamp).toLocaleTimeString() : ''}</span>
 					<span class="shrink-0 w-12 uppercase font-bold tracking-wide {levelColor(entry.level)}">{entry.level}</span>
@@ -150,5 +184,6 @@
 </Card>
 
 <p class="mt-2 text-xs font-mono text-muted-foreground">
-	Showing {filteredLogs.length} of {$logStore.logs.length} • {$logStore.buffer.length} buffered • {$logStore.realtime ? 'realtime' : `interval ${$logStore.streamInterval}ms`} • {$logStore.paused ? 'paused' : 'live'} • {$logStore.connectionStatus}
+	Showing {displayLogs.length}/{filteredLogs.length} of {$logStore.logs.length} • {$logStore.buffer.length} buffered • {$logStore.realtime ? 'realtime (100ms)' : `interval ${$logStore.streamInterval}ms`} • {$logStore.paused ? 'paused' : 'live'} • {$logStore.connectionStatus}
+	{#if filteredLogs.length > visibleCount} • scroll to top to load more{/if}
 </p>

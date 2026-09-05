@@ -36,6 +36,11 @@
 	}
 </script>
 
+<svelte:head>
+	<title>Endpoints - Stackyrd</title>
+	<meta name="description" content="Endpoints - Stackyrd" />
+</svelte:head>
+
 <PageHeader title="Endpoints" subtitle="{$endpoints?.total ?? 0} endpoints across {$endpoints?.services?.length ?? 0} services">
 	<Button variant="outline" size="sm" onclick={refreshEndpoints} aria-label="Refresh endpoints">
 		<RefreshCw class="h-4 w-4" />

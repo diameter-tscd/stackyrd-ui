@@ -60,14 +60,12 @@
 
 	function pressAnim(node: HTMLElement) {
 		const onDown = () => {
-			const prefersReduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-			if (prefersReduced || disabled) return;
+			if (window.matchMedia("(prefers-reduced-motion: reduce)").matches || document.documentElement.hasAttribute('data-disable-anim') || disabled) return;
  // -ignore
 			(animate as any)(node as any, { scale: 0.96 }, { duration: 0.1, easing: "ease-out" });
 		};
 		const onUp = () => {
-			const prefersReduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-			if (prefersReduced || disabled) return;
+			if (window.matchMedia("(prefers-reduced-motion: reduce)").matches || document.documentElement.hasAttribute('data-disable-anim') || disabled) return;
  // -ignore
 			(animate as any)(node as any, { scale: 1 }, { duration: 0.2, easing: [0.34, 1.56, 0.64, 1] as unknown as string });
 		};

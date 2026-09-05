@@ -2,6 +2,7 @@ import { writable, derived, type Readable } from 'svelte/store';
 import { browser } from '$app/environment';
 import { logStore } from './logs';
 import { health, services, infra, resources, instanceIdentity, mcpUptime, mcpInstanceId, connectionStatus, goroutineDump, goroutineHistory } from './data';
+import type { Connection } from '$lib/vault/vault';
 
 export interface AuthState {
 	token: string;
@@ -11,49 +12,34 @@ export interface AuthState {
 	lastChecked: string | null;
 }
 
-const STORAGE_KEY = 'stackyrd_auth';
-
-function loadAuth(): AuthState {
-	if (!browser) {
-		return { token: '', apiUrl: '', mcpUrl: '', authenticated: false, lastChecked: null };
-	}
-	const stored = localStorage.getItem(STORAGE_KEY);
-	if (stored) {
-		try {
-			return JSON.parse(stored);
-		} catch {
-			return { token: '', apiUrl: '', mcpUrl: '', authenticated: false, lastChecked: null };
-		}
-	}
-	return { token: '', apiUrl: '', mcpUrl: '', authenticated: false, lastChecked: null };
-}
-
 function createAuthStore() {
-	const { subscribe, set, update } = writable<AuthState>(loadAuth());
+	const { subscribe, set, update } = writable<AuthState>({
+		token: '',
+		apiUrl: '',
+		mcpUrl: '',
+		authenticated: false,
+		lastChecked: null
+	});
 
 	return {
 		subscribe,
-		setToken: (token: string) =>
-			update((s) => {
-				const next = { ...s, token, authenticated: !!token };
-				if (browser) localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-				return next;
-			}),
-		setUrls: (apiUrl: string, mcpUrl: string) =>
-			update((s) => {
-				const next = { ...s, apiUrl, mcpUrl };
-				if (browser) localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-				return next;
-			}),
+		setSession: (conn: Connection) =>
+			update((s) => ({
+				...s,
+				token: conn.token,
+				apiUrl: conn.apiUrl,
+				mcpUrl: conn.mcpUrl,
+				authenticated: true,
+				lastChecked: new Date().toISOString()
+			})),
 		setAuthenticated: (authenticated: boolean) =>
-			update((s) => {
-				const next = { ...s, authenticated, lastChecked: new Date().toISOString() };
-				if (browser) localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-				return next;
-			}),
+			update((s) => ({
+				...s,
+				authenticated,
+				lastChecked: new Date().toISOString()
+			})),
 		logout: () => {
 			if (browser) {
-				localStorage.removeItem(STORAGE_KEY);
 				try { logStore.stop(); } catch {}
 				try { health.set(null); } catch {}
 				try { services.set([]); } catch {}

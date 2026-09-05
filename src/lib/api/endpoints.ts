@@ -15,7 +15,8 @@ import type {
 	ResourceData,
 	InstanceIdentity,
 	MemoryData,
-	GoroutineDump
+	GoroutineDump,
+	ConfigMCPData
 } from '$lib/types/api';
 
 function effToken(token: string | null): string | null {
@@ -81,8 +82,12 @@ export async function getMCPCluster(token: string | null): Promise<ApiResponse<{
 	return mcpToolsCall(effToken(token), 'stackyrd_cluster') as Promise<ApiResponse<{ members: InstanceIdentity[] }>>;
 }
 
-export async function getMCPGoroutines(token: string | null): Promise<ApiResponse<GoroutineDump>> {
-	return mcpToolsCall(effToken(token), 'stackyrd_goroutines') as Promise<ApiResponse<GoroutineDump>>;
+export async function getMCPGoroutines(token: string | null, filter?: string, limit: number = 500): Promise<ApiResponse<GoroutineDump>> {
+	return mcpToolsCall(effToken(token), 'stackyrd_goroutines', { filter: filter ?? '', limit }) as Promise<ApiResponse<GoroutineDump>>;
+}
+
+export async function getMCPConfig(token: string | null): Promise<ApiResponse<ConfigMCPData>> {
+	return mcpToolsCall(effToken(token), 'stackyrd_config') as Promise<ApiResponse<ConfigMCPData>>;
 }
 
 export async function getMCPServices(token: string | null): Promise<ApiResponse<ServiceMeta[]>> {
@@ -175,6 +180,19 @@ export async function getMCPEndpoints(token: string | null): Promise<ApiResponse
 
 export async function getConfig(token: string | null): Promise<ApiResponse<ConfigData>> {
 	return apiFetch<ApiResponse<ConfigData>>('/api/v1/config', effToken(token));
+}
+
+export async function getConfigYaml(token: string | null): Promise<string> {
+	const t = effToken(token);
+	const response = await fetch('/api/v1/config/raw', {
+		headers: t ? { Authorization: `Bearer ${t}` } : {}
+	});
+	const text = await response.text();
+	if (!response.ok) {
+		const { ApiError } = await import('$lib/api/rest');
+		throw new ApiError(text || response.statusText, response.status, text);
+	}
+	return text;
 }
 
 export async function saveTheme(

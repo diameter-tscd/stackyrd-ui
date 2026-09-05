@@ -15,8 +15,7 @@
 	}>();
 
 	function headerIn(node: HTMLElement) {
-		const prefersReduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-		if (prefersReduced) return;
+		if (window.matchMedia("(prefers-reduced-motion: reduce)").matches || document.documentElement.hasAttribute('data-disable-anim')) return;
  // -ignore
 		(animate as any)(node as any, { y: [-8, 0], opacity: [0, 1] }, { duration: 0.35, easing: "ease-out" });
 	}

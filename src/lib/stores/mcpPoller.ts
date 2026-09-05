@@ -7,10 +7,17 @@ import type { ApiResponse, EndpointMeta, EndpointList, ServiceMeta, InfraStatus,
 let polling: ReturnType<typeof setInterval> | null = null;
 let goroutinePolling: ReturnType<typeof setInterval> | null = null;
 let uptimeFetchedAt: number | null = null;
+let visibilityHandler: (() => void) | null = null;
+let consecutiveFails = 0;
+let isPolling = false;
+let slowPollTimer: ReturnType<typeof setInterval> | null = null;
 
-const INTERVAL = 3000;
+const FAST_INTERVAL = 10000;
+const SLOW_INTERVAL = 30000;
 const GOROUTINE_INTERVAL = 10000;
 const MAX_GOROUTINE_HISTORY = 120;
+const BACKOFF_BASE = 2000;
+const BACKOFF_MAX = 30000;
 
 interface JSONRPCRequest {
 	jsonrpc: '2.0';
@@ -26,17 +33,10 @@ interface JSONRPCResponse {
 	error?: { code: number; message: string };
 }
 
-function buildBatch(): JSONRPCRequest[] {
-	const tools = [
-		'stackyrd_health',
-		'stackyrd_services',
-		'stackyrd_infra',
-		'stackyrd_endpoints',
-		'stackyrd_uptime',
-		'stackyrd_resources',
-		'stackyrd_identity',
-		'stackyrd_memory'
-	];
+const FAST_TOOLS = ['stackyrd_health', 'stackyrd_services', 'stackyrd_infra', 'stackyrd_uptime'];
+const SLOW_TOOLS = ['stackyrd_endpoints', 'stackyrd_resources', 'stackyrd_identity', 'stackyrd_memory'];
+
+function buildBatch(tools: string[]): JSONRPCRequest[] {
 	const mcpVersion = '2026-07-28';
 	const baseId = Date.now();
 	return tools.map((name, i) => ({
@@ -98,95 +98,125 @@ function parseMCPResult(result: unknown): unknown {
 	}
 }
 
-async function pollAll() {
+async function fetchBatch(tools: string[]): Promise<{ responses: JSONRPCResponse[]; hasSuccess: boolean }> {
 	const token = get(auth).token;
+	if (!token) return { responses: [], hasSuccess: false };
+	if (typeof document !== 'undefined' && document.hidden) return { responses: [], hasSuccess: false };
 	const url = resolveMcpUrl();
-	const batch = buildBatch();
+	const batch = buildBatch(tools);
+	const idToTool = new Map<number, string>();
+	batch.forEach((b) => idToTool.set(b.id as number, b.params.name as string));
 	const mcpVersion = '2026-07-28';
-
 	const headers: Record<string, string> = {
 		'Content-Type': 'application/json',
-		'Accept': 'application/json, text/event-stream',
+		Accept: 'application/json, text/event-stream',
 		'MCP-Protocol-Version': mcpVersion,
 		'Mcp-Method': 'tools/call'
 	};
 	if (token) headers['Authorization'] = `Bearer ${token}`;
-
-	const response = await fetch(url, { method: 'POST', headers, body: JSON.stringify(batch) });
-
+	let response: Response;
+	try {
+		response = await fetch(url, { method: 'POST', headers, body: JSON.stringify(batch) });
+	} catch {
+		return { responses: [], hasSuccess: false };
+	}
 	try {
 		const iid = response.headers.get('X-MCP-Instance-ID') || response.headers.get('x-mcp-instance-id');
 		if (iid) mcpInstanceId.set(iid);
 	} catch {}
-
 	const rawText = await response.text();
 	const contentType = response.headers.get('content-type') || '';
 	const isSse = contentType.includes('text/event-stream') || (rawText.includes('event:') && rawText.includes('data:'));
-
 	let responses: JSONRPCResponse[] = [];
-
 	if (isSse) {
-		const lines = rawText.split('\n');
-		for (const line of lines) {
+		for (const line of rawText.split('\n')) {
 			if (!line.startsWith('data:')) continue;
 			const jsonStr = line.slice(5).trim();
 			if (!jsonStr) continue;
-			try {
-				responses.push(JSON.parse(jsonStr) as JSONRPCResponse);
-			} catch {
-				// skip malformed line
-			}
+			try { responses.push(JSON.parse(jsonStr) as JSONRPCResponse); } catch {}
 		}
 	} else {
 		let parsed: unknown;
-		try {
-			parsed = JSON.parse(rawText);
-		} catch {
-			connectionStatus.set('disconnected');
-			return;
-		}
-		if (Array.isArray(parsed)) {
-			responses = parsed as JSONRPCResponse[];
-		} else if (parsed && typeof parsed === 'object') {
-			responses = [parsed as JSONRPCResponse];
-		}
+		try { parsed = JSON.parse(rawText); } catch { return { responses: [], hasSuccess: false }; }
+		if (Array.isArray(parsed)) responses = parsed as JSONRPCResponse[];
+		else if (parsed && typeof parsed === 'object') responses = [parsed as JSONRPCResponse];
 	}
-
-	if (responses.length === 0) {
-		connectionStatus.set('disconnected');
-		return;
-	}
-
+	if (responses.length === 0) return { responses: [], hasSuccess: false };
 	let hasSuccess = false;
-
-	responses.forEach((resp, i) => {
+	const apply = (tool: string, data: unknown) => {
+		switch (tool) {
+			case 'stackyrd_health': health.set(data as HealthData); hasSuccess = true; break;
+			case 'stackyrd_services': services.set(normalizeServices(data)); hasSuccess = true; break;
+			case 'stackyrd_infra': infra.set(normalizeInfra(data)); hasSuccess = true; break;
+			case 'stackyrd_uptime': mcpUptime.set(data as UptimeData); uptimeFetchedAt = Date.now(); hasSuccess = true; break;
+			case 'stackyrd_endpoints': endpoints.set(normalizeEndpoints(data)); hasSuccess = true; break;
+			case 'stackyrd_resources': resources.set(data as ResourceData); hasSuccess = true; break;
+			case 'stackyrd_identity': instanceIdentity.set(data as InstanceIdentity); hasSuccess = true; break;
+			case 'stackyrd_memory': memory.set(data as MemoryData); hasSuccess = true; break;
+		}
+	};
+	responses.forEach((resp) => {
 		if (resp.error || !resp.result) return;
 		const data = parseMCPResult(resp.result);
-		if (data === null || data === undefined) return;
-
-		switch (i) {
-			case 0: health.set(data as HealthData); break;
-			case 1: services.set(normalizeServices(data)); break;
-			case 2: infra.set(normalizeInfra(data)); break;
-			case 3: endpoints.set(normalizeEndpoints(data)); break;
-			case 4: mcpUptime.set(data as UptimeData); uptimeFetchedAt = Date.now(); break;
-			case 5: resources.set(data as ResourceData); break;
-			case 6: instanceIdentity.set(data as InstanceIdentity); break;
-			case 7: memory.set(data as MemoryData); break;
-			default: return;
+		if (data == null) return;
+		const tool = idToTool.get(resp.id as number) ?? tools[responses.indexOf(resp)] ?? '';
+		if (tool) apply(tool, data);
+		else {
+			const idx = responses.indexOf(resp);
+			if (idx >= 0 && idx < tools.length) apply(tools[idx], data);
 		}
-		hasSuccess = true;
 	});
+	if (responses.length === 1 && tools.length === 1 && !hasSuccess) {
+		const singleTool = tools[0];
+		const r = responses[0];
+		if (r && !r.error && r.result) {
+			const d = parseMCPResult(r.result);
+			if (d != null) apply(singleTool, d);
+		}
+	}
+	return { responses, hasSuccess };
+}
 
-	connectionStatus.set(hasSuccess ? 'connected' : 'disconnected');
+async function pollFast() {
+	if (isPolling) return;
+	isPolling = true;
+	try {
+		const { hasSuccess } = await fetchBatch(FAST_TOOLS);
+		if (hasSuccess) {
+			consecutiveFails = 0;
+			connectionStatus.set('connected');
+		} else {
+			consecutiveFails++;
+			if (consecutiveFails >= 3) connectionStatus.set('disconnected');
+			scheduleBackoff();
+		}
+	} finally { isPolling = false; }
+}
+
+async function pollSlow() {
+	if (typeof document !== 'undefined' && document.hidden) return;
+	await fetchBatch(SLOW_TOOLS);
+}
+
+function scheduleBackoff() {
+	if (consecutiveFails < 3) return;
+	if (polling) { clearInterval(polling); polling = null; }
+	const delay = Math.min(BACKOFF_BASE * Math.pow(2, consecutiveFails - 3), BACKOFF_MAX);
+	setTimeout(() => {
+		if (!polling && get(auth).authenticated) {
+			consecutiveFails = 0;
+			pollFast();
+			polling = setInterval(pollFast, FAST_INTERVAL);
+		}
+	}, delay);
 }
 
 async function pollGoroutines() {
 	const token = get(auth).token;
 	if (!token) return;
+	if (typeof document !== 'undefined' && document.hidden) return;
 	const url = resolveMcpUrl();
 	const mcpVersion = '2026-07-28';
-
 	const body: JSONRPCRequest = {
 		jsonrpc: '2.0',
 		id: Date.now(),
@@ -197,56 +227,63 @@ async function pollGoroutines() {
 			_meta: { 'io.modelcontextprotocol/protocolVersion': mcpVersion }
 		}
 	};
-
 	const headers: Record<string, string> = {
 		'Content-Type': 'application/json',
-		'Accept': 'application/json, text/event-stream',
+		Accept: 'application/json, text/event-stream',
 		'MCP-Protocol-Version': mcpVersion,
-		'Mcp-Method': 'tools/call'
+		'Mcp-Method': 'tools/call',
+		Authorization: `Bearer ${token}`
 	};
-	headers['Authorization'] = `Bearer ${token}`;
-
-	const response = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body) });
-
+	let response: Response;
+	try { response = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body) }); } catch { return; }
 	try {
 		const iid = response.headers.get('X-MCP-Instance-ID') || response.headers.get('x-mcp-instance-id');
 		if (iid) mcpInstanceId.set(iid);
 	} catch {}
-
 	const rawText = await response.text();
 	const contentType = response.headers.get('content-type') || '';
 	const isSse = contentType.includes('text/event-stream') || (rawText.includes('event:') && rawText.includes('data:'));
-
 	let jsonText = rawText;
 	if (isSse) {
-		const lines = rawText.split('\n');
-		const dataLines = lines.filter((l) => l.startsWith('data:')).map((l) => l.slice(5).trim());
+		const dataLines = rawText.split('\n').filter((l) => l.startsWith('data:')).map((l) => l.slice(5).trim());
 		jsonText = dataLines.join('\n') || rawText;
 	}
-
 	let parsed: unknown;
-	try {
-		parsed = JSON.parse(jsonText || rawText);
-	} catch {
-		return;
-	}
-
+	try { parsed = JSON.parse(jsonText || rawText); } catch { return; }
 	const resp = parsed as JSONRPCResponse;
 	if (resp.error || !resp.result) return;
 	const data = parseMCPResult(resp.result) as GoroutineDump | null;
 	if (!data) return;
-
 	goroutineDump.set(data);
 	const point: GoroutineDataPoint = { timestamp: Date.now(), count: data.count, states: data.states };
 	const current = get(goroutineHistory);
-	goroutineHistory.set([...current, point].slice(-MAX_GOROUTINE_HISTORY));
+	if (current.length >= MAX_GOROUTINE_HISTORY) {
+		current.shift();
+		current.push(point);
+		goroutineHistory.set(current);
+	} else {
+		goroutineHistory.set([...current, point]);
+	}
 }
 
 export const mcpPoller = {
 	start() {
 		if (polling) return;
-		pollAll();
-		polling = setInterval(pollAll, INTERVAL);
+		consecutiveFails = 0;
+		pollFast();
+		pollSlow();
+		polling = setInterval(pollFast, FAST_INTERVAL);
+		slowPollTimer = setInterval(pollSlow, SLOW_INTERVAL);
+		if (typeof document !== 'undefined' && !visibilityHandler) {
+			visibilityHandler = () => {
+				if (!document.hidden && get(auth).authenticated) {
+					pollFast();
+					pollSlow();
+				}
+			};
+			document.addEventListener('visibilitychange', visibilityHandler);
+			window.addEventListener('online', visibilityHandler);
+		}
 	},
 	startGoroutinePolling() {
 		if (goroutinePolling) return;
@@ -256,15 +293,26 @@ export const mcpPoller = {
 	async refreshGoroutines() {
 		await pollGoroutines();
 	},
+	async refreshResources() {
+		await fetchBatch(['stackyrd_resources']);
+	},
+	async refreshMemory() {
+		await fetchBatch(['stackyrd_memory']);
+	},
+	async refreshSlow() {
+		await fetchBatch(SLOW_TOOLS);
+	},
 	stop() {
-		if (polling) {
-			clearInterval(polling);
-			polling = null;
+		if (polling) { clearInterval(polling); polling = null; }
+		if (slowPollTimer) { clearInterval(slowPollTimer); slowPollTimer = null; }
+		if (goroutinePolling) { clearInterval(goroutinePolling); goroutinePolling = null; }
+		if (visibilityHandler && typeof document !== 'undefined') {
+			document.removeEventListener('visibilitychange', visibilityHandler);
+			window.removeEventListener('online', visibilityHandler);
+			visibilityHandler = null;
 		}
-		if (goroutinePolling) {
-			clearInterval(goroutinePolling);
-			goroutinePolling = null;
-		}
+		consecutiveFails = 0;
+		isPolling = false;
 	},
 	get uptimeFetchedAt() {
 		return uptimeFetchedAt;

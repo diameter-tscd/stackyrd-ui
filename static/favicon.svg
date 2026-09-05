@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Stackyrd">
+  <rect width="32" height="32" rx="7" fill="#000000"/>
+  <rect x="1" y="1" width="30" height="30" rx="6" fill="none" stroke="#ffffff" stroke-opacity="0.08" stroke-width="1"/>
+  <!-- stacked layers -->
+  <g transform="translate(6 7)">
+    <rect x="0" y="10" width="20" height="6" rx="1.8" fill="#dbe3f5" stroke="#000" stroke-width="1.1"/>
+    <rect x="0" y="5.2" width="20" height="6" rx="1.8" fill="#dfed33" stroke="#000" stroke-width="1.1"/>
+    <rect x="0" y="0.4" width="20" height="6" rx="1.8" fill="#ed225d" stroke="#000" stroke-width="1.1"/>
+    <!-- subtle highlight -->
+    <rect x="2.2" y="1.8" width="7" height="1.2" rx="0.6" fill="white" opacity="0.55"/>
+  </g>
+  <!-- dot accent -->
+  <circle cx="26" cy="6.5" r="1.7" fill="#dfed33" stroke="#000" stroke-width="0.9"/>
+</svg>

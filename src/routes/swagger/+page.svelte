@@ -36,6 +36,11 @@
 	}
 </script>
 
+<svelte:head>
+	<title>Swagger - Stackyrd</title>
+	<meta name="description" content="Swagger - Stackyrd" />
+</svelte:head>
+
 <PageHeader title="Swagger" subtitle="Interactive API documentation — proxied from :8080/swagger">
 	<div class="flex gap-2">
 		<Button variant="outline" size="sm" onclick={reload} aria-label="Reload swagger">

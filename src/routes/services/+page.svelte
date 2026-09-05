@@ -52,6 +52,11 @@
 	];
 </script>
 
+<svelte:head>
+	<title>Services - Stackyrd</title>
+	<meta name="description" content="Services - Stackyrd" />
+</svelte:head>
+
 <PageHeader title="Services" subtitle="{$services.length} services discovered">
 	<Button variant="outline" size="sm" onclick={refreshServices} aria-label="Refresh services">
 		<RefreshCw class="h-4 w-4" />

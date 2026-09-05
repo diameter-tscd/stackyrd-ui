@@ -53,6 +53,11 @@
 	}
 </script>
 
+<svelte:head>
+	<title>{serviceName ? `${serviceName} - Stackyrd` : 'Service - Stackyrd'}</title>
+	<meta name="description" content="{serviceName ? `${serviceName} - Stackyrd` : 'Service - Stackyrd'}" />
+</svelte:head>
+
 <PageHeader title={serviceName ?? 'Service'} subtitle="Service details and endpoints">
 	<Button variant="outline" size="sm" onclick={() => goto('/services')} aria-label="Back to services">
 		<ArrowLeft class="h-4 w-4" />

@@ -15,14 +15,17 @@
 		[key: string]: unknown;
 	} = $props();
 
+	function shouldReduce() {
+			return window.matchMedia("(prefers-reduced-motion: reduce)").matches || document.documentElement.hasAttribute('data-disable-anim');
+		}
 	function hoverAnim(node: HTMLElement) {
 		const onEnter = () => {
-			const prefersReduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-			if (prefersReduced) return;
+			if (shouldReduce()) return;
  // -ignore
 			(animate as any)(node as any, { y: -2, scale: 1.005 }, { duration: 0.2, easing: "ease-out" });
 		};
 		const onLeave = () => {
+			if (shouldReduce()) return;
  // -ignore
 			(animate as any)(node as any, { y: 0, scale: 1 }, { duration: 0.2, easing: "ease-out" });
 		};

@@ -10,71 +10,97 @@
 	import Badge from '$lib/components/ui/Badge.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 	import Spinner from '$lib/components/ui/Spinner.svelte';
-	import EmptyState from '$lib/components/ui/EmptyState.svelte';
-	import { Plot, BarY, Line, RuleY, Frame, GridY } from 'svelteplot';
-	import { Activity, RefreshCw, AlertTriangle, Bug } from 'lucide-svelte';
+	import { Activity, RefreshCw, AlertTriangle } from 'lucide-svelte';
 
 	let mounted = $state(false);
+	let plotReady = $state(false);
+	let visible = $state(false);
+	let chartContainer: HTMLDivElement | undefined = $state(undefined);
+	let PlotComp: any = $state(null);
+	let BarYComp: any = $state(null);
+	let LineComp: any = $state(null);
+	let RuleYComp: any = $state(null);
+	let FrameComp: any = $state(null);
+	let GridYComp: any = $state(null);
 
 	onMount(() => { mounted = true; });
 
+	$effect(() => {
+		if (!chartContainer || visible) return;
+		const obs = new IntersectionObserver(([e]) => { if (e.isIntersecting) { visible = true; obs.disconnect(); } }, { rootMargin: '200px' });
+		obs.observe(chartContainer);
+		return () => obs.disconnect();
+	});
+
+	$effect(() => {
+		if (!visible || plotReady || $goroutineHistory.length < 2) return;
+		(async () => {
+			const m = await import('svelteplot');
+			PlotComp = m.Plot; BarYComp = m.BarY; LineComp = m.Line; RuleYComp = m.RuleY; FrameComp = m.Frame; GridYComp = m.GridY;
+			plotReady = true;
+		})();
+	});
+
 	const MAX_POINTS = 120;
 
-	const chartData = $derived(
-		$goroutineHistory.map((p, i) => ({
-			idx: i,
-			count: p.count
-		}))
-	);
+	const chartData = $derived.by(() => {
+		const h = $goroutineHistory;
+		const out = new Array(h.length);
+		for (let i = 0; i < h.length; i++) out[i] = { idx: i, count: h[i].count };
+		return out;
+	});
 
-	const leakSlope = $derived(() => {
-		if ($goroutineHistory.length < 10) return 0;
-		const recent = $goroutineHistory.slice(-30);
+	const leakSlope = $derived.by(() => {
+		const h = $goroutineHistory;
+		if (h.length < 10) return 0;
+		const recent = h.slice(-30);
 		const n = recent.length;
-		const firstHalf = recent.slice(0, Math.floor(n / 2));
-		const secondHalf = recent.slice(Math.floor(n / 2));
-		const avgFirst = firstHalf.reduce((s, p) => s + p.count, 0) / firstHalf.length;
-		const avgSecond = secondHalf.reduce((s, p) => s + p.count, 0) / secondHalf.length;
-		return avgSecond - avgFirst;
+		const mid = n >> 1;
+		let s1 = 0; for (let i = 0; i < mid; i++) s1 += recent[i].count;
+		let s2 = 0; for (let i = mid; i < n; i++) s2 += recent[i].count;
+		return s2 / (n - mid) - s1 / mid;
 	});
 
-	const isLeaking = $derived(() => {
-		if ($goroutineHistory.length < 20) return false;
-		const recent = $goroutineHistory.slice(-60);
-		let increases = 0;
-		for (let i = 1; i < recent.length; i++) {
-			if (recent[i].count > recent[i - 1].count) increases++;
-		}
-		return increases > recent.length * 0.7;
+	const isLeaking = $derived.by(() => {
+		const h = $goroutineHistory;
+		if (h.length < 20) return false;
+		const recent = h.slice(-60);
+		let inc = 0;
+		for (let i = 1; i < recent.length; i++) if (recent[i].count > recent[i-1].count) inc++;
+		return inc > recent.length * 0.7;
 	});
 
-	const avgCount = $derived(() => {
-		if ($goroutineHistory.length === 0) return 0;
-		return Math.round($goroutineHistory.reduce((s, p) => s + p.count, 0) / $goroutineHistory.length);
+	const avgCount = $derived.by(() => {
+		const h = $goroutineHistory;
+		if (h.length === 0) return 0;
+		let sum = 0; for (let i = 0; i < h.length; i++) sum += h[i].count;
+		return Math.round(sum / h.length);
 	});
 
-	const maxCount = $derived(() => {
-		if ($goroutineHistory.length === 0) return 0;
-		return Math.max(...$goroutineHistory.map((p) => p.count));
+	const maxCount = $derived.by(() => {
+		const h = $goroutineHistory;
+		if (h.length === 0) return 0;
+		let m = h[0].count;
+		for (let i = 1; i < h.length; i++) if (h[i].count > m) m = h[i].count;
+		return m;
 	});
 
-	const topStates = $derived(() => {
-		if (!$goroutineDump || !$goroutineDump.states) return [];
-		return Object.entries($goroutineDump.states)
-			.sort(([, a], [, b]) => b - a)
-			.slice(0, 6);
+	const topStates = $derived.by(() => {
+		const d = $goroutineDump;
+		if (!d?.states) return [] as [string, number][];
+		return (Object.entries(d.states) as [string, number][]).sort((a,b) => b[1]-a[1]).slice(0,6);
 	});
 
-	const leakSeverity = $derived(() => {
-		const slope = leakSlope();
-		if (slope > 5) return 'critical';
-		if (slope > 2) return 'warning';
-		if (slope > 0.5) return 'watch';
+	const leakSeverity = $derived.by(() => {
+		const s = leakSlope;
+		if (s > 5) return 'critical';
+		if (s > 2) return 'warning';
+		if (s > 0.5) return 'watch';
 		return 'stable';
 	});
 
-	const yMax = $derived(() => {
-		const m = maxCount();
+	const yMax = $derived.by(() => {
+		const m = maxCount;
 		return m > 0 ? Math.ceil(m * 1.15) : 10;
 	});
 
@@ -82,6 +108,11 @@
 		await mcpPoller.refreshGoroutines();
 	}
 </script>
+
+<svelte:head>
+	<title>Runtimes - Stackyrd</title>
+	<meta name="description" content="Runtimes - Stackyrd" />
+</svelte:head>
 
 <PageHeader title="Runtimes" subtitle="Goroutine histogram & leak detection — 20min FIFO">
 	<Button variant="outline" size="sm" onclick={refreshGoroutines} aria-label="Refresh goroutines">
@@ -108,32 +139,32 @@
 			<Card>
 				<CardContent class="p-5">
 					<div class="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">Peak (20min)</div>
-					<div class="mt-1 text-2xl font-bold tabular-nums">{maxCount()}</div>
+					<div class="mt-1 text-2xl font-bold tabular-nums">{maxCount}</div>
 					<div class="text-[11px] text-muted-foreground font-semibold">max observed</div>
 				</CardContent>
 			</Card>
 			<Card>
 				<CardContent class="p-5">
 					<div class="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">Average</div>
-					<div class="mt-1 text-2xl font-bold tabular-nums">{avgCount()}</div>
+					<div class="mt-1 text-2xl font-bold tabular-nums">{avgCount}</div>
 					<div class="text-[11px] text-muted-foreground font-semibold">rolling mean</div>
 				</CardContent>
 			</Card>
-			<Card class={isLeaking() ? 'border-red-500' : ''}>
+			<Card class={isLeaking ? 'border-red-500' : ''}>
 				<CardContent class="p-5">
 					<div class="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">Leak Status</div>
 					<div class="mt-1 flex items-center gap-2">
-						{#if isLeaking()}
+						{#if isLeaking}
 							<AlertTriangle class="h-5 w-5 text-red-500" />
 							<span class="text-lg font-bold text-red-500">LEAKING</span>
-						{:else if leakSeverity() === 'watch'}
+						{:else if leakSeverity === 'watch'}
 							<span class="text-lg font-bold text-yellow-500">WATCH</span>
 						{:else}
 							<span class="text-lg font-bold text-green-500">STABLE</span>
 						{/if}
 					</div>
 					<div class="text-[11px] text-muted-foreground font-semibold">
-						Δ {leakSlope() > 0 ? '+' : ''}{leakSlope().toFixed(1)} / window
+						Δ {leakSlope > 0 ? '+' : ''}{leakSlope.toFixed(1)} / window
 					</div>
 				</CardContent>
 			</Card>
@@ -148,27 +179,34 @@
 				</div>
 			</CardHeader>
 			<CardContent>
-				{#if mounted && chartData.length > 1 && yMax() > 0}
+				<div bind:this={chartContainer}>
+				{#if mounted && chartData.length > 1 && yMax > 0 && plotReady && PlotComp}
 					<div class="w-full h-64">
-						<Plot
+						<PlotComp
 							padding={40}
 							height={260}
 							x={{ axis: 'bottom', label: 'Time' }}
-							y={{ domain: [0, yMax()], axis: 'left', label: 'Goroutines' }}
+							y={{ domain: [0, yMax], axis: 'left', label: 'Goroutines' }}
 						>
-							<Frame />
-							<GridY />
-							<BarY data={chartData} x="idx" y="count" fill="#ed225d" fillOpacity={0.7} />
-							<Line data={chartData} x="idx" y="count" stroke="#000" strokeWidth={1.5} curve="monotone-x" />
-							<RuleY data={[avgCount()]} stroke="#dfed33" strokeWidth={2} strokeDasharray="4 2" />
-						</Plot>
+							<FrameComp />
+							<GridYComp />
+							<BarYComp data={chartData} x="idx" y="count" fill="#ed225d" fillOpacity={0.7} />
+							<LineComp data={chartData} x="idx" y="count" stroke="#000" strokeWidth={1.5} curve="monotone-x" />
+							<RuleYComp data={[avgCount]} stroke="#dfed33" strokeWidth={2} strokeDasharray="4 2" />
+						</PlotComp>
 					</div>
-				{:else}
+				{:else if chartData.length <= 1}
 					<div class="flex items-center justify-center py-12 text-sm font-semibold text-muted-foreground">
 						<Spinner size="sm" />
 						<span class="ml-2">Collecting data points… ({chartData.length}/{MAX_POINTS})</span>
 					</div>
+				{:else}
+					<div class="flex items-center justify-center py-12 text-sm font-semibold text-muted-foreground">
+						<Spinner size="sm" />
+						<span class="ml-2">Loading chart…</span>
+					</div>
 				{/if}
+				</div>
 				<div class="mt-3 flex items-center gap-4 text-[11px] font-semibold text-muted-foreground">
 					<span class="flex items-center gap-1.5">
 						<span class="inline-block h-2.5 w-2.5 rounded-sm bg-primary/70"></span> Count per poll
@@ -190,7 +228,7 @@
 			</CardHeader>
 			<CardContent>
 				<div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-					{#each topStates() as [state, count]}
+					{#each topStates as [state, count]}
 						<div class="rounded-xl border-2 border-black p-3 bg-secondary/50">
 							<div class="text-[10px] font-semibold uppercase tracking-[0.1em] text-muted-foreground truncate" title={state}>
 								{state.split(' ')[0]}
@@ -205,13 +243,13 @@
 			</CardContent>
 		</Card>
 
-		{#if isLeaking()}
+		{#if isLeaking}
 			<Card class="border-red-500 border-2">
 				<CardHeader class="pb-3">
 					<div class="flex items-center gap-2">
 						<AlertTriangle class="h-4 w-4 text-red-500" />
 						<CardTitle class="text-sm font-semibold text-red-500">Leak Detected</CardTitle>
-						<Badge variant="error" class="ml-auto">SLOPE +{leakSlope().toFixed(1)}</Badge>
+						<Badge variant="error" class="ml-auto">SLOPE +{leakSlope.toFixed(1)}</Badge>
 					</div>
 				</CardHeader>
 				<CardContent>

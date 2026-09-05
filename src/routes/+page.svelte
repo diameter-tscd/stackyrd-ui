@@ -15,38 +15,55 @@
 	import Alert from '$lib/components/ui/alert.svelte';
 	import AlertTitle from '$lib/components/ui/alert-title.svelte';
 	import AlertDescription from '$lib/components/ui/alert-description.svelte';
-	import { Server, HardDrive, AlertTriangle, Activity, Cpu, MemoryStick, Hash, Boxes, Monitor, Fingerprint, Globe, Building2, HardDriveIcon as DriveIcon } from 'lucide-svelte';
+	import { Server, HardDrive, AlertTriangle, Activity, Cpu, MemoryStick, Hash, Boxes, Monitor, Fingerprint, Globe, Building2, HardDriveIcon as DriveIcon, RefreshCw } from 'lucide-svelte';
 	import MemoryViz from '$lib/components/ui/MemoryViz.svelte';
+	import Button from '$lib/components/ui/Button.svelte';
 
 	let ticker: ReturnType<typeof setInterval> | null = null;
+	let rafId: number | null = null;
 	let now = $state(Date.now());
 	let firstSeenAt = $state<number | null>(null);
+	let lastTick = 0;
+	let refreshingResources = $state(false);
+
+	function tickLoop(ts: number) {
+		if (document.hidden) { rafId = requestAnimationFrame(tickLoop); return; }
+		if (ts - lastTick >= 1000) { lastTick = ts; now = Date.now(); }
+		rafId = requestAnimationFrame(tickLoop);
+	}
 
 	onMount(() => {
 		if ($auth.authenticated && firstSeenAt === null) firstSeenAt = Date.now();
-		ticker = setInterval(() => (now = Date.now()), 1000);
+		rafId = requestAnimationFrame(tickLoop);
 	});
 
 	onDestroy(() => {
 		if (ticker) clearInterval(ticker);
+		if (rafId !== null) cancelAnimationFrame(rafId);
 	});
 
 	$effect(() => {
 		if ($auth.authenticated && firstSeenAt === null) firstSeenAt = Date.now();
+		if (!$auth.authenticated && rafId !== null) { cancelAnimationFrame(rafId); rafId = null; }
+		else if ($auth.authenticated && rafId === null) { lastTick = performance.now(); rafId = requestAnimationFrame(tickLoop); }
 	});
 
-	const runningServices = $derived($services.filter((s) => s.status === 'running').length);
-	const failedServices = $derived($services.filter((s) => s.status === 'failed').length);
-	const connectedInfra = $derived($infra.filter((i) => i.status === 'connected').length);
+	const runningServices = $derived.by(() => { let n=0; for (const s of $services) if (s.status==='running') n++; return n; });
+	const failedServices = $derived.by(() => { let n=0; for (const s of $services) if (s.status==='failed') n++; return n; });
+	const connectedInfra = $derived.by(() => { let n=0; for (const i of $infra) if (i.status==='connected') n++; return n; });
 	const healthStatus = $derived($health?.server_ready ? 'Ready' : ($health?.status === 'ready' ? 'Ready' : 'Initializing'));
 
+	const durationCache = new Map<string, number | null>();
 	function parseGoDuration(input: string): number | null {
+		if (durationCache.has(input)) return durationCache.get(input)!;
 		const s = input.trim();
-		if (!s) return null;
-		if (/^\d+$/.test(s)) return Number(s) * 1000;
+		if (!s) { durationCache.set(input, null); return null; }
+		if (/^\d+$/.test(s)) { const v = Number(s) * 1000; durationCache.set(input, v); return v; }
 		if (/^\d+(\.\d+)?s$/.test(s) && !/[mhd]/.test(s)) {
 			const n = Number(s.slice(0, -1));
-			return Number.isFinite(n) ? n * 1000 : null;
+			const v = Number.isFinite(n) ? n * 1000 : null;
+			durationCache.set(input, v);
+			return v;
 		}
 		const re = /(\d+(?:\.\d+)?)(ns|us|µs|ms|s|m|h|d)/g;
 		let ms = 0;
@@ -56,7 +73,7 @@
 			matched = true;
 			const val = Number(m[1]);
 			const unit = m[2];
-			if (!Number.isFinite(val)) return null;
+			if (!Number.isFinite(val)) { durationCache.set(input, null); return null; }
 			switch (unit) {
 				case 'ns': ms += val / 1e6; break;
 				case 'us':
@@ -68,7 +85,10 @@
 				case 'd': ms += val * 86400000; break;
 			}
 		}
-		return matched ? ms : null;
+		const out = matched ? ms : null;
+		if (durationCache.size > 200) durationCache.clear();
+		durationCache.set(input, out);
+		return out;
 	}
 
 	function parseTimestampMs(input: unknown): number | null {
@@ -169,7 +189,18 @@
 				return 'warning';
 		}
 	}
+
+	async function refreshResources() {
+		if (refreshingResources) return;
+		refreshingResources = true;
+		try { await mcpPoller.refreshResources(); } finally { refreshingResources = false; }
+	}
 </script>
+
+<svelte:head>
+	<title>Overview - Stackyrd</title>
+	<meta name="description" content="Overview - Stackyrd" />
+</svelte:head>
 
 <PageHeader title="Overview" subtitle="System status and health at a glance" />
 
@@ -210,7 +241,11 @@
 			<div class="flex items-center gap-2">
 				<Cpu class="h-5 w-5 text-emerald-500" aria-hidden="true" />
 				<CardTitle class="text-sm font-semibold">System Resources</CardTitle>
-				<span class="ml-auto text-[11px] font-semibold tracking-wide text-muted-foreground">via stackyrd_resources • TUI mirror</span>
+				<span class="text-[11px] font-semibold tracking-wide text-muted-foreground">via stackyrd_resources • TUI mirror</span>
+				<Button variant="outline" size="sm" class="ml-auto rounded-full h-7 px-2.5 border-black" onclick={refreshResources} disabled={refreshingResources} aria-label="Refresh system resources">
+					<RefreshCw class="h-3.5 w-3.5 {refreshingResources ? 'animate-spin' : ''}" />
+					{refreshingResources ? 'Refreshing' : 'Refresh'}
+				</Button>
 			</div>
 		</CardHeader>
 		<CardContent>
